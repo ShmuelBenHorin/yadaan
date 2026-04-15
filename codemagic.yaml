@@ -1,13 +1,18 @@
 workflows:
-  android-release:
-    name: Android Release
+  ios-release:
+    name: iOS Release
     max_build_duration: 60
+    instance_type: mac_mini_m1
+
     environment:
       flutter: stable
-      android_signing:
-        - yidaan_keystore  # שם הקיסטור שתגדיר ב-CodeMagic
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.shmuel.yidaan
       vars:
-        PACKAGE_NAME: "trivia.master"
+        BUNDLE_ID: "com.shmuel.yidaan"
+        XCODE_WORKSPACE: "ios/Runner.xcworkspace"
+        XCODE_SCHEME: "Runner"
 
     scripts:
       - name: Get Flutter packages
@@ -16,21 +21,17 @@ workflows:
       - name: Run tests
         script: flutter test
 
-      - name: Build Android App Bundle
+      - name: Build iOS
         script: |
-          flutter build appbundle --release \
-            --build-name=1.0.0 \
-            --build-number=$(($(google-play get-latest-build-number \
-              --package-name "$PACKAGE_NAME" \
-              --tracks=alpha,beta,production) + 1))
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist
 
     artifacts:
-      - build/**/outputs/**/*.aab
-      - build/**/outputs/**/mapping.txt
-      - flutter_drive.log
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
 
     publishing:
-      google_play:
-        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
-        track: internal  # שנה ל-alpha / beta / production לפי הצורך
-        submit_as_draft: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
