@@ -9,8 +9,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: master.trivia
-        certificate: ios_distribution
-        provisioning_profile: yadaan_profile
 
     scripts:
       - name: Get Flutter packages
@@ -20,7 +18,10 @@ workflows:
         script: flutter test
 
       - name: Build iOS
-        script: flutter build ipa --release
+        script: |
+          cd ios && pod install && cd ..
+          flutter build ipa --release \
+            --dart-define=BUNDLE_ID=master.trivia
 
     artifacts:
       - build/ios/ipa/*.ipa
