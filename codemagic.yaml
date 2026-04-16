@@ -9,6 +9,8 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: master.trivia
+        certificate: ios_distribution
+        provisioning_profile: yadaan_profile
 
     scripts:
       - name: Get Flutter packages
