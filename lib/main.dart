@@ -801,10 +801,25 @@ void _showCatDiffPicker(BuildContext ctx,String key,String name,String emoji,Col
         const SizedBox(height:20),
         ...Diff.values.map((d){
           final prem=PurchaseService.instance.isPremium;
-          final count=QRepo.all(prem).where((q)=>q.category==key&&q.diff==d).length;
+          final locked=d.isPrem && !prem;
+          final count=QRepo.all(true).where((q)=>q.category==key&&q.diff==d).length;
           return Padding(padding:const EdgeInsets.only(bottom:10),
             child:GestureDetector(
-              onTap:(){Navigator.pop(ctx);Navigator.push(ctx,_slide(CategoryQuizScreen(category:key,name:name,emoji:emoji,color:color,diff:d)));},
+              onTap:(){
+                Navigator.pop(ctx);
+                if(locked){
+                  showModalBottomSheet(context:ctx,isScrollControlled:true,backgroundColor:Colors.transparent,
+                    builder:(_)=>PaywallSheet(onCode:(c){
+                      final ok=PurchaseService.instance.tryDev(c);
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                        content:Text(ok?'\u05E7\u05D5\u05D3 \u05D0\u05D5\u05E9\u05E8! \u05DB\u05DC \u05D4\u05EA\u05DB\u05E0\u05D9\u05DD \u05E4\u05EA\u05D5\u05D7\u05D9\u05DD \u{1F389}':'\u05E7\u05D5\u05D3 \u05E9\u05D2\u05D5\u05D9'),
+                        backgroundColor:ok?Pal.green:Pal.red));
+                    }));
+                  return;
+                }
+                Navigator.push(ctx,_slide(CategoryQuizScreen(category:key,name:name,emoji:emoji,color:color,diff:d)));
+              },
               child:Container(
                 padding:const EdgeInsets.symmetric(horizontal:16,vertical:13),
                 decoration:BoxDecoration(
@@ -812,13 +827,16 @@ void _showCatDiffPicker(BuildContext ctx,String key,String name,String emoji,Col
                   borderRadius:BorderRadius.circular(14),
                   border:Border.all(color:d.color.withOpacity(0.5),width:1.2)),
                 child:Row(children:[
-                  Text(d.emoji,style:const TextStyle(fontSize:20)),
+                  Text(locked?'\u{1F451}':d.emoji,style:const TextStyle(fontSize:20)),
                   const SizedBox(width:12),
                   Text(d.label,style:TextStyle(color:d.color,fontSize:15,fontWeight:FontWeight.w700)),
+                  if(locked)...[const SizedBox(width:8),Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:2),
+                    decoration:BoxDecoration(color:Pal.premium.withOpacity(0.2),borderRadius:BorderRadius.circular(8)),
+                    child:const Text('\u05E4\u05E8\u05D5',style:TextStyle(color:Pal.premium,fontSize:10,fontWeight:FontWeight.w800)))],
                   const Spacer(),
                   Text('$count שאלות',style:TextStyle(color:d.color.withOpacity(0.8),fontSize:12)),
                   const SizedBox(width:8),
-                  Icon(Icons.arrow_forward_ios,color:d.color,size:14),
+                  Icon(locked?Icons.lock:Icons.arrow_forward_ios,color:d.color,size:14),
                 ]))));
         }).toList(),
         const SizedBox(height:8),
@@ -1613,35 +1631,43 @@ class PaywallSheet extends StatefulWidget {
   @override State<PaywallSheet> createState()=>_PS();
 }
 class _PS extends State<PaywallSheet>{
-  int _plan=1;bool _showCode=false;final _ctrl=TextEditingController();
+  // ברירת מחדל: חודשי (אינדקס 0) = מודגש באמצע
+  int _plan=0;bool _showCode=false;final _ctrl=TextEditingController();
   final _lbl=['\u05D7\u05D5\u05D3\u05E9\u05D9','\u05E9\u05E0\u05EA\u05D9','\u05DC\u05E6\u05DE\u05D9\u05EA\u05D5\u05EA'];
   final _price=['\u20AA11.99/\u05D7\u05D5\u05D3\u05E9','\u20AA79.99/\u05E9\u05E0\u05D4','\u20AA59.99'];
-  final _save=['','\u05D7\u05D9\u05E1\u05DB\u05D5\u05DF 44%','\u05D4\u05DB\u05D9 \u05DE\u05E9\u05EA\u05DC\u05DD'];
+  final _save=['\u05D4\u05DB\u05D9 \u05E4\u05D5\u05E4\u05D5\u05DC\u05E8\u05D9','\u05D7\u05D9\u05E1\u05DB\u05D5\u05DF 44%','\u05DC\u05EA\u05DE\u05D9\u05D3'];
+  // סדר תצוגה: שנתי (1) → חודשי (0) באמצע → לצמיתות (2)
+  final _order = const [1, 0, 2];
   List<Widget> _planTiles() {
     final tiles = <Widget>[];
-    for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      final i = _order[j];           // אינדקס תוכנית לתמחור ורכישה
+      final isMiddle = j == 1;       // המרכזי = חודשי, מודגש
       final s = i == _plan;
-      tiles.add(Expanded(child: Padding(padding: EdgeInsets.only(right: i < 2 ? 8.0 : 0.0),
-        child: GestureDetector(onTap: () => setState(() => _plan = i),
-          child: AnimatedContainer(duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-            decoration: BoxDecoration(
-              color: s ? Pal.premium.withOpacity(0.15) : Pal.card,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: s ? Pal.premium : Pal.ts.withOpacity(0.2), width: s ? 2 : 1)),
-            child: Column(children: [
-              Text(['📅', '📆', '♾️'][i], style: const TextStyle(fontSize: 22)),
-              const SizedBox(height: 6),
-              Text(_lbl[i], style: TextStyle(color: s ? Pal.tp : Pal.ts, fontSize: 12, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 2),
-              Text(_price[i], style: TextStyle(color: s ? Pal.premium : Pal.ts, fontSize: 10, fontWeight: FontWeight.w600)),
-              if (_save[i].isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(color: Pal.green.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
-                  child: Text(_save[i], style: const TextStyle(color: Pal.green, fontSize: 9, fontWeight: FontWeight.w800))),
-              ],
-            ]))))));
+      tiles.add(Expanded(
+        flex: isMiddle ? 13 : 10,    // החודשי טיפה יותר רחב
+        child: Padding(padding: EdgeInsets.only(right: j < 2 ? 8.0 : 0.0),
+          child: GestureDetector(onTap: () => setState(() => _plan = i),
+            child: AnimatedContainer(duration: const Duration(milliseconds: 200),
+              padding: EdgeInsets.symmetric(vertical: isMiddle ? 18 : 14, horizontal: 4),
+              decoration: BoxDecoration(
+                color: s ? Pal.premium.withOpacity(0.15) : Pal.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: s ? Pal.premium : Pal.ts.withOpacity(0.2), width: s ? 2 : 1),
+                boxShadow: isMiddle ? [BoxShadow(color: Pal.premium.withOpacity(0.25), blurRadius: 12, offset: const Offset(0, 4))] : null),
+              child: Column(children: [
+                Text(['📅', '📆', '♾️'][i], style: TextStyle(fontSize: isMiddle ? 26 : 22)),
+                const SizedBox(height: 6),
+                Text(_lbl[i], style: TextStyle(color: s ? Pal.tp : Pal.ts, fontSize: isMiddle ? 13 : 12, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(_price[i], style: TextStyle(color: s ? Pal.premium : Pal.ts, fontSize: isMiddle ? 11 : 10, fontWeight: FontWeight.w600)),
+                if (_save[i].isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(color: Pal.green.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                    child: Text(_save[i], style: TextStyle(color: Pal.green, fontSize: isMiddle ? 10 : 9, fontWeight: FontWeight.w800))),
+                ],
+              ]))))));
     }
     return tiles;
   }

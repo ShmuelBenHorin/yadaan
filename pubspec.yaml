@@ -1,7 +1,7 @@
 name: yidaan
 description: "ידען — חידון שלבים"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.11.1
@@ -13,6 +13,7 @@ dependencies:
   purchases_flutter: ^8.0.0
   shared_preferences: ^2.2.3   # ← חדש! לשמירת התקדמות שלבים ואנרגיה
   google_mobile_ads: ^5.1.0    # ← AdMob פרסומות
+  audioplayers: ^6.1.0         # ← סאונד במובייל (iOS / Android)
 
 dev_dependencies:
   flutter_test:
@@ -21,3 +22,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/sounds/
