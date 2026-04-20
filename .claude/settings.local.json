@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -i 's/PRODUCT_BUNDLE_IDENTIFIER = com\\\\.example\\\\.findCar2;/PRODUCT_BUNDLE_IDENTIFIER = find.car;/g' \"C:\\\\Users\\\\1\\\\Desktop\\\\high-tech\\\\find_car\\\\ios\\\\Runner.xcodeproj\\\\project.pbxproj\")",
+      "Bash(sed -i 's/PRODUCT_BUNDLE_IDENTIFIER = com\\\\.example\\\\.findCar2\\\\.RunnerTests;/PRODUCT_BUNDLE_IDENTIFIER = find.car.RunnerTests;/g' \"C:\\\\Users\\\\1\\\\Desktop\\\\high-tech\\\\find_car\\\\ios\\\\Runner.xcodeproj\\\\project.pbxproj\")",
+      "Bash(python3 -c \"from PIL import Image; print\\('ok'\\)\")",
+      "Bash(pip install:*)",
+      "Bash(py -3 -c \"from PIL import Image; print\\('ok'\\)\")",
+      "Bash(py -3 -m pip install Pillow -q)",
+      "Bash(py -3 \"C:\\\\Users\\\\1\\\\Desktop\\\\high-tech\\\\find_car\\\\convert_screenshots.py\")",
+      "Bash(py -3 \"C:\\\\Users\\\\1\\\\Desktop\\\\high-tech\\\\find_car\\\\convert_all_screenshots.py\")"
+    ]
+  }
+}
