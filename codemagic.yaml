@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m1
 
     integrations:
-      app_store_connect: shmuel2
+      app_store_connect: shmuel
 
     environment:
       flutter: stable
