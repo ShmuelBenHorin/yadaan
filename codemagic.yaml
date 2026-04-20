@@ -29,9 +29,22 @@ workflows:
         script: |
           xcode-project use-profiles
           flutter build ios --release --no-codesign
-          xcode-project build-ipa \
-            --workspace ios/Runner.xcworkspace \
-            --scheme Runner
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath /tmp/Runner.xcarchive \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER=shmuel \
+            DEVELOPMENT_TEAM=SYXWJ6AFK5 \
+            COMPILER_INDEX_STORE_ENABLE=NO
+          xcodebuild \
+            -exportArchive \
+            -archivePath /tmp/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist /Users/builder/export_options.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
