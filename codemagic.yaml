@@ -4,38 +4,40 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m1
 
-    integrations:
-      app_store_connect: shmuel2
-
     environment:
+      groups:
+        - group
       flutter: stable
+      xcode: latest
+      cocoapods: default
       ios_signing:
-        distribution_type: app_store
+        provisioning_profiles:
+          - shmuel
+        certificates:
+          - יכי
         bundle_identifier: master.trivia
 
     scripts:
-      - name: Initialize keychain
-        script: keychain initialize
-
-      - name: Add certificates to keychain
-        script: keychain add-certificates
-
-      - name: Set up provisioning profiles
-        script: xcode-project use-profiles
-
       - name: Get Flutter packages
         script: flutter pub get
 
       - name: Run tests
         script: flutter test
 
-      - name: Build iOS
-        script: flutter build ipa --release
+      - name: Build iOS (signed)
+        script: |
+          xcode-project use-profiles
+          flutter build ios --release --no-codesign
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner
 
     artifacts:
       - build/ios/ipa/*.ipa
 
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
