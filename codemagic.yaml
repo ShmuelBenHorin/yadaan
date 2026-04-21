@@ -13,9 +13,9 @@ workflows:
       cocoapods: default
       ios_signing:
         provisioning_profiles:
-          - shmuel
+          - trivia_appstore
         certificates:
-          - יכי
+          - trivia_car_ce
         bundle_identifier: master.trivia
 
     scripts:
@@ -29,22 +29,9 @@ workflows:
         script: |
           xcode-project use-profiles
           flutter build ios --release --no-codesign
-          xcodebuild \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath /tmp/Runner.xcarchive \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER=shmuel \
-            DEVELOPMENT_TEAM=SYXWJ6AFK5 \
-            COMPILER_INDEX_STORE_ENABLE=NO
-          xcodebuild \
-            -exportArchive \
-            -archivePath /tmp/Runner.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist /Users/builder/export_options.plist
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner
 
     artifacts:
       - build/ios/ipa/*.ipa
