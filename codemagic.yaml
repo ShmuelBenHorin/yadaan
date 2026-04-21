@@ -15,7 +15,7 @@ workflows:
         provisioning_profiles:
           - yadaan_pr
         certificates:
-          - trivia_car_ce
+          - car_ce
         bundle_identifier: master.trivia
 
     scripts:
