@@ -22,6 +22,9 @@ workflows:
       - name: Get Flutter packages
         script: flutter pub get
 
+      - name: Generate app icons
+        script: dart run flutter_launcher_icons
+
       - name: Run tests
         script: flutter test
 
@@ -29,19 +32,9 @@ workflows:
         script: |
           xcode-project use-profiles
           flutter build ios --release --no-codesign
-          xcodebuild \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath /tmp/Runner.xcarchive \
-            archive \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            DEVELOPMENT_TEAM=SYXWJ6AFK5
-          xcodebuild \
-            -exportArchive \
-            -archivePath /tmp/Runner.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist /Users/builder/export_options.plist
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner
 
     artifacts:
       - build/ios/ipa/*.ipa
