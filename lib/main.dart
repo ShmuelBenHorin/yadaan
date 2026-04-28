@@ -1093,6 +1093,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     super.initState();
     _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex);
     _gs.addListener(_onChange);
+    EnergyService.instance.addListener(_onEnergyChange);
     _shakeCtrl=AnimationController(vsync:this,duration:const Duration(milliseconds:400));
     _cardCtrl=AnimationController(vsync:this,duration:const Duration(milliseconds:400));
     _energyLossCtrl=AnimationController(vsync:this,duration:const Duration(milliseconds:900));
@@ -1101,6 +1102,15 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     _energyLossOpacity=TweenSequence([TweenSequenceItem(tween:Tween(begin:0.0,end:1.0),weight:15),TweenSequenceItem(tween:Tween(begin:1.0,end:1.0),weight:50),TweenSequenceItem(tween:Tween(begin:1.0,end:0.0),weight:35)]).animate(CurvedAnimation(parent:_energyLossCtrl,curve:Curves.easeInOut));
     _energyLossOffset=Tween(begin:0.0,end:-80.0).animate(CurvedAnimation(parent:_energyLossCtrl,curve:Curves.easeOut));
     _cardCtrl.forward();
+  }
+  void _onEnergyChange(){
+    if(!mounted||_exiting)return;
+    if(!EnergyService.instance.has){
+      _exiting=true;
+      Future.delayed(const Duration(milliseconds:300),(){
+        if(mounted)Navigator.pushReplacement(context,_slide(const NoEnergyScreen()));
+      });
+    }
   }
   void _onChange(){
     if(!mounted)return;
@@ -1112,7 +1122,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     if(_gs.phase==Phase.complete&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});}
     if(_gs.phase==Phase.failed&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex)));});}
   }
-  @override void dispose(){_gs.removeListener(_onChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();super.dispose();}
+  @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();super.dispose();}
   Future<bool> _quit() async {
     final leave=await showDialog<bool>(context:context,barrierDismissible:false,builder:(_)=>_QuitDlg());
     return leave??false;
@@ -1723,10 +1733,7 @@ class _PS extends State<PaywallSheet>{
                 }
               },
               child:const Text('שחזר רכישות',style:TextStyle(color:Pal.ts,fontSize:13,decoration:TextDecoration.underline))),
-            const SizedBox(height:8),
-            const Text('ביטול בכל עת · חיוב דרך App Store',
-              textAlign:TextAlign.center,
-              style:TextStyle(color:Pal.ts,fontSize:11)),
+
           ])),
       ]));
   }
