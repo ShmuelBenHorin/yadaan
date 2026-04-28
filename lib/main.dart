@@ -485,6 +485,10 @@ class _EnergyChipState extends State<EnergyChip> with SingleTickerProviderStateM
                   key: ValueKey(e.energy),
                   style: TextStyle(color: c, fontWeight: FontWeight.w900, fontSize: 14))),
               Text('/${e.maxE}', style: const TextStyle(color: Pal.ts, fontSize: 11)),
+              if (e.label.isNotEmpty && e.energy < e.maxE) ...[
+                const SizedBox(width: 6),
+                Text(e.label, style: const TextStyle(color: Pal.gold, fontSize: 10, fontWeight: FontWeight.w700)),
+              ],
               if (e.canWatchAd) ...[
                 const SizedBox(width: 4),
                 const Text('+', style: TextStyle(color: Pal.gold, fontSize: 13, fontWeight: FontWeight.w900)),
@@ -1612,7 +1616,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
                   style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w900)),
                 const SizedBox(height:10),
                 Text(
-                  'פרו מטעין ${Cfg.energyRechargeAmtPro} אנרגיה כל 15 דקות\nבמקום ${Cfg.energyRechargeAmt} במצב הרגיל',
+                  '50 אנרגיה במקום 15 · טעינה של ${Cfg.energyRechargeAmtPro} כל 15 דקות\nבמקום ${Cfg.energyRechargeAmt} במצב הרגיל',
                   textAlign:TextAlign.center,
                   style:const TextStyle(color:Pal.ts,fontSize:13,height:1.6)),
                 const SizedBox(height:16),
@@ -1633,7 +1637,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
                     decoration:BoxDecoration(
                       gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
                       borderRadius:BorderRadius.circular(14)),
-                    child:const Text('\u05E4\u05EA\u05D7 \u05E4\u05E8\u05D5',
+                    child:const Text('רכישת פרו',
                       textAlign:TextAlign.center,
                       style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w900)))),
               ])),
