@@ -826,6 +826,8 @@ void _showCatDiffPicker(BuildContext ctx,String key,String name,String emoji,Col
                     }));
                   return;
                 }
+                if(!EnergyService.instance.has){Navigator.push(ctx,_slide(const NoEnergyScreen()));return;}
+                EnergyService.instance.spend(Cfg.energyCostWrong);
                 Navigator.push(ctx,_slide(CategoryQuizScreen(category:key,name:name,emoji:emoji,color:color,diff:d)));
               },
               child:Container(
@@ -1416,9 +1418,12 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
               curve: Curves.easeOut,
               child: Column(children: [
                 if (_canNext) ...[
-                  _bigBtn('השלב הבא ▶', widget.diff.color, () =>
+                  _bigBtn('השלב הבא ▶', widget.diff.color, () {
+                    if(!EnergyService.instance.has){Navigator.push(context,_slide(const NoEnergyScreen()));return;}
+                    EnergyService.instance.spend(Cfg.energyCostWrong);
                     Navigator.pushReplacement(context, _slide(GameScreen(
-                      diff: widget.diff, levelIndex: widget.levelIndex + 1)))),
+                      diff: widget.diff, levelIndex: widget.levelIndex + 1)));
+                  }),
                   const SizedBox(height: 14),
                 ],
                 _outBtn('🗺️  מפת שלבים', () =>
