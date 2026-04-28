@@ -907,7 +907,39 @@ class _DiffCard extends StatelessWidget {
       return GestureDetector(
         onTap:(){
           if(isPrem){_paywall(context);return;}
-          if(!unlocked){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('\u05E6\u05E8\u05D9\u05DA $need \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD \u05DB\u05D3\u05D9 \u05DC\u05E4\u05EA\u05D5\u05D7'),backgroundColor:Pal.red));return;}
+          if(!unlocked){
+            final all=ls.allStars;
+            showDialog(context:context,builder:(_)=>Dialog(
+              backgroundColor:Colors.transparent,
+              child:Container(
+                padding:const EdgeInsets.all(28),
+                decoration:BoxDecoration(color:const Color(0xFF0A1128),borderRadius:BorderRadius.circular(24),
+                  border:Border.all(color:Pal.gold.withOpacity(0.4),width:1.5),
+                  boxShadow:[BoxShadow(color:Pal.gold.withOpacity(0.2),blurRadius:30)]),
+                child:Column(mainAxisSize:MainAxisSize.min,children:[
+                  const Text('🔒',style:TextStyle(fontSize:52)),
+                  const SizedBox(height:12),
+                  const Text('עדיין נעול',style:TextStyle(color:Pal.tp,fontSize:22,fontWeight:FontWeight.w900)),
+                  const SizedBox(height:8),
+                  Text('צריך $need ⭐ כדי לפתוח',textAlign:TextAlign.center,
+                    style:const TextStyle(color:Pal.ts,fontSize:15,height:1.5)),
+                  const SizedBox(height:20),
+                  ClipRRect(borderRadius:BorderRadius.circular(8),
+                    child:LinearProgressIndicator(
+                      value:(all/need).clamp(0.0,1.0),
+                      minHeight:10,
+                      backgroundColor:Pal.card,
+                      valueColor:AlwaysStoppedAnimation(Pal.gold))),
+                  const SizedBox(height:8),
+                  Text('$all / $need ⭐',style:const TextStyle(color:Pal.gold,fontSize:13,fontWeight:FontWeight.w700)),
+                  const SizedBox(height:20),
+                  GestureDetector(onTap:()=>Navigator.pop(context),
+                    child:Container(width:double.infinity,padding:const EdgeInsets.symmetric(vertical:14),
+                      decoration:BoxDecoration(color:Pal.card,borderRadius:BorderRadius.circular(14)),
+                      child:const Text('הבנתי',textAlign:TextAlign.center,
+                        style:TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w700)))),
+                ]))));
+            return;}
           Navigator.push(context,_slide(LevelMapScreen(diff:diff)));
         },
         child:Container(
