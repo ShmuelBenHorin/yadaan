@@ -1614,14 +1614,15 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
             child:Column(children:[
               Row(mainAxisAlignment:MainAxisAlignment.center,children:[
                 const Text('\u26A1',style:TextStyle(fontSize:20)),const SizedBox(width:8),
-                Text('${e.energy} / ${e.maxE} \u05D0\u05E0\u05E8\u05D2\u05D9\u05D4',
+                Text('אנרגיה: ${e.energy} מתוך ${e.maxE}',
+                  textDirection:TextDirection.rtl,
                   style:const TextStyle(color:Pal.tp,fontSize:17,fontWeight:FontWeight.w700)),
               ]),
               const SizedBox(height:14),
               const Divider(color:Color(0x222A3A6E)),
               const SizedBox(height:14),
               Text(
-                'כל 15 דקות מתווספות ${isPro?Cfg.energyRechargeAmtPro:Cfg.energyRechargeAmt} אנרגיה',
+                'בכל רבע שעה מתווספת אנרגיה ${isPro?Cfg.energyRechargeAmtPro:Cfg.energyRechargeAmt}',
                 textAlign:TextAlign.center,
                 style:const TextStyle(color:Pal.ts,fontSize:14,height:1.5)),
               if(e.label.isNotEmpty)...[
@@ -1648,7 +1649,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
                   style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w900)),
                 const SizedBox(height:10),
                 Text(
-                  '50 אנרגיה במקום 15 · טעינה של ${Cfg.energyRechargeAmtPro} כל 15 דקות\nבמקום ${Cfg.energyRechargeAmt} במצב הרגיל',
+                  'אנרגיה מקסימלית: 50 במקום 15\nטעינה: ${Cfg.energyRechargeAmtPro} בכל רבע שעה במקום ${Cfg.energyRechargeAmt}',
                   textAlign:TextAlign.center,
                   style:const TextStyle(color:Pal.ts,fontSize:13,height:1.6)),
                 const SizedBox(height:16),
