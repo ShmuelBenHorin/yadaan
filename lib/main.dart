@@ -1708,7 +1708,7 @@ class _PS extends State<PaywallSheet>{
           GestureDetector(onTap:()async{final ok=await ps.restore();if(mounted){Navigator.pop(context);if(ok)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('\u2705 \u05D4\u05E8\u05DB\u05D9\u05E9\u05D4 \u05E9\u05D5\u05D7\u05D6\u05E8\u05D4!'),backgroundColor:Pal.green));}},
             child:const Text('\u05E9\u05D7\u05D6\u05E8 \u05E8\u05DB\u05D9\u05E9\u05D5\u05EA',style:TextStyle(color:Pal.ts,fontSize:13,decoration:TextDecoration.underline))),
           const SizedBox(height:8),
-          const Text('\u05D1\u05D9\u05D8\u05D5\u05DC \u05D1\u05DB\u05DC \u05E2\u05EA \u00B7 \u05D7\u05D9\u05D5\u05D1 \u05D3\u05E8\u05DA App Store \u05D0\u05D5 Google Play',textAlign:TextAlign.center,style:TextStyle(color:Pal.ts,fontSize:11)),
+          const Text('\u05D1\u05D9\u05D8\u05D5\u05DC \u05D1\u05DB\u05DC \u05E2\u05EA \u00B7 \u05D7\u05D9\u05D5\u05D1 \u05D3\u05E8\u05DA App Store',textAlign:TextAlign.center,style:TextStyle(color:Pal.ts,fontSize:11)),
         ])),
       ]));
   }

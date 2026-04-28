@@ -42,7 +42,7 @@ class S {
   static const playAgain    = '🔄  Play Again';
   static const homeLbl      = '🏠  Home';
   static const restoreLbl   = 'Restore purchases';
-  static const cancelLbl    = 'Cancel anytime · Billed via App Store or Google Play';
+  static const cancelLbl    = 'Cancel anytime · Billed via App Store';
   static const codeHint     = 'Have an access code?';
   static const codeField    = 'Enter code...';
   static const codeOk       = 'OK';
