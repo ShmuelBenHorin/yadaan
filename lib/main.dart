@@ -1622,7 +1622,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
               const Divider(color:Color(0x222A3A6E)),
               const SizedBox(height:14),
               Text(
-                'בכל רבע שעה מתווספת אנרגיה ${isPro?Cfg.energyRechargeAmtPro:Cfg.energyRechargeAmt}',
+                isPro ? 'טעינה של 3 אנרגיה בכל רבע שעה' : 'אחת בכל רבע שעה מתווספת אנרגיה אחת',
                 textAlign:TextAlign.center,
                 style:const TextStyle(color:Pal.ts,fontSize:14,height:1.5)),
               if(e.label.isNotEmpty)...[
@@ -1649,7 +1649,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
                   style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w900)),
                 const SizedBox(height:10),
                 Text(
-                  'אנרגיה מקסימלית: 50 במקום 15\nטעינה: ${Cfg.energyRechargeAmtPro} בכל רבע שעה במקום ${Cfg.energyRechargeAmt}',
+                  'אנרגיה מקסימלית: 50 במקום 15\nטעינה של 3 אנרגיה בכל רבע שעה',
                   textAlign:TextAlign.center,
                   style:const TextStyle(color:Pal.ts,fontSize:13,height:1.6)),
                 const SizedBox(height:16),
