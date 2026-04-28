@@ -17,7 +17,7 @@ import 'sfx_stub.dart' if (dart.library.html) 'sfx_web.dart';
 // ═══════════════════════════════════════════════
 class Cfg {
   static const rcAndroid            = 'YOUR_REVENUECAT_ANDROID_KEY';
-  static const rciOS                = 'YOUR_REVENUECAT_IOS_KEY';
+  static const rciOS                = 'appl_DSEyAVZKuOktZXgzNqiPKhjnOlO';
   static const entitlement          = 'premium';
   static const devCode              = 'shmuel1231';
   static const mockPremium          = false;
@@ -1629,6 +1629,106 @@ class PaywallSheet extends StatefulWidget {
   final void Function(String) onCode;
   const PaywallSheet({super.key,required this.onCode});
   @override State<PaywallSheet> createState()=>_PS();
+}
+class _PS extends State<PaywallSheet>{
+  bool _showCode=false;
+  final _ctrl=TextEditingController();
+  @override void dispose(){_ctrl.dispose();super.dispose();}
+  @override Widget build(BuildContext context){
+    final ps=PurchaseService.instance;
+    return Container(
+      height:MediaQuery.of(context).size.height*0.85,
+      decoration:const BoxDecoration(color:Color(0xFF0A1128),borderRadius:BorderRadius.vertical(top:Radius.circular(28))),
+      child:Column(children:[
+        Container(margin:const EdgeInsets.only(top:12),width:40,height:4,decoration:BoxDecoration(color:Pal.ts.withOpacity(0.4),borderRadius:BorderRadius.circular(2))),
+        Expanded(child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(24,20,24,0),child:Column(children:[
+          Container(width:76,height:76,
+            decoration:BoxDecoration(shape:BoxShape.circle,
+              gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
+              boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.6),blurRadius:24)]),
+            child:const Center(child:Text('👑',style:TextStyle(fontSize:38)))),
+          const SizedBox(height:16),
+          const Text('ידען פרו',style:TextStyle(color:Pal.tp,fontSize:28,fontWeight:FontWeight.w900)),
+          const SizedBox(height:6),
+          const Text('12.90 ₪ לחודש',style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w700)),
+          const SizedBox(height:24),
+          _bf('🔴','שלבים קשים פתוחים'),
+          _bf('⚡','50 אנרגיה — פי 3 יותר מרגיל'),
+          _bf('🔄','טעינה של 3 אנרגיה כל רבע שעה'),
+          _bf('🚫','ללא פרסומות'),
+          _bf('🔓','גישה לכל התכנים העתידיים'),
+          const SizedBox(height:24),
+          GestureDetector(
+            onTap:()=>setState(()=>_showCode=!_showCode),
+            child:Text('יש לך קוד גישה?',style:TextStyle(color:Pal.ts.withOpacity(0.6),fontSize:12,decoration:TextDecoration.underline))),
+          if(_showCode)...[
+            const SizedBox(height:12),
+            Row(children:[
+              Expanded(child:TextField(controller:_ctrl,
+                style:const TextStyle(color:Pal.tp),
+                decoration:InputDecoration(
+                  hintText:'הזן קוד...',
+                  hintStyle:const TextStyle(color:Pal.ts),
+                  filled:true,fillColor:Pal.card,
+                  border:OutlineInputBorder(borderRadius:BorderRadius.circular(12)),
+                  contentPadding:const EdgeInsets.symmetric(horizontal:16,vertical:12)))),
+              const SizedBox(width:10),
+              GestureDetector(
+                onTap:()=>widget.onCode(_ctrl.text.trim()),
+                child:Container(
+                  padding:const EdgeInsets.symmetric(horizontal:16,vertical:14),
+                  decoration:BoxDecoration(color:Pal.accent,borderRadius:BorderRadius.circular(12)),
+                  child:const Text('אשר',style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900)))),
+            ]),
+          ],
+          const SizedBox(height:20),
+        ]))),
+        Padding(padding:EdgeInsets.fromLTRB(24,0,24,MediaQuery.of(context).padding.bottom+16),
+          child:Column(children:[
+            if(ps.isLoading)
+              const CircularProgressIndicator(color:Pal.premium)
+            else GestureDetector(
+              onTap:()async{
+                await ps.loadOfferings();
+                if(ps.packages.isNotEmpty&&mounted){
+                  final ok=await ps.purchase(ps.packages.first);
+                  if(ok&&mounted)Navigator.pop(context);
+                }
+              },
+              child:Container(width:double.infinity,
+                padding:const EdgeInsets.symmetric(vertical:18),
+                decoration:BoxDecoration(
+                  gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
+                  borderRadius:BorderRadius.circular(18),
+                  boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.5),blurRadius:16,offset:const Offset(0,4))]),
+                child:const Text('התחל עכשיו — 12.90 ₪ לחודש',
+                  textAlign:TextAlign.center,
+                  style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w900)))),
+            const SizedBox(height:10),
+            GestureDetector(
+              onTap:()async{
+                final ok=await ps.restore();
+                if(mounted){
+                  Navigator.pop(context);
+                  if(ok)ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content:Text('✅ הרכישה שוחזרה!'),backgroundColor:Pal.green));
+                }
+              },
+              child:const Text('שחזר רכישות',style:TextStyle(color:Pal.ts,fontSize:13,decoration:TextDecoration.underline))),
+            const SizedBox(height:8),
+            const Text('ביטול בכל עת · חיוב דרך App Store',
+              textAlign:TextAlign.center,
+              style:TextStyle(color:Pal.ts,fontSize:11)),
+          ])),
+      ]));
+  }
+  Widget _bf(String e,String t)=>Padding(
+    padding:const EdgeInsets.only(bottom:14),
+    child:Row(children:[
+      Text(e,style:const TextStyle(fontSize:20)),
+      const SizedBox(width:14),
+      Expanded(child:Text(t,style:const TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w600))),
+    ]));
 }
 class _PS extends State<PaywallSheet>{
   // ברירת מחדל: חודשי (אינדקס 0) = מודגש באמצע
