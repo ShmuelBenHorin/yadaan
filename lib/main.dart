@@ -186,7 +186,15 @@ class EnergyService extends ChangeNotifier {
     await p.setInt('energy',_e); await p.setInt('energy_ts',_last.millisecondsSinceEpoch);
   }
   // לא מציגים זמן — שומרים על אי-וודאות כמו Duolingo
-  String get label => '';
+  String get label {
+    if (_e >= maxE) return '';
+    final next = _last.add(Duration(minutes: Cfg.energyRechargeMins));
+    final diff = next.difference(DateTime.now());
+    if (diff.inSeconds <= 0) return 'עכשיו';
+    if (diff.inMinutes < 1) return 'פחות מדקה';
+    final mins = diff.inMinutes + 1;
+    return mins.toString() + ' דקות';
+  }
   bool get canWatchAd => _e < maxE && !PurchaseService.instance.isPremium;
   // אנרגיה מפרסומת — amount לפי סוג הפרסומת
   Future<void> rewardFromAd({int amount = Cfg.adRewardedEnergy}) async {
