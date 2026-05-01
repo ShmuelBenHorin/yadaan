@@ -47,8 +47,8 @@ class Cfg {
   static const starsPerLevel        = 3;
   static const maxWrongPerLevel     = 2;
   static const starsToUnlockNext    = 2;
-  static const starsToUnlockMedium  = 25;
-  static const starsToUnlockHard    = 25;
+  static const starsToUnlockMedium  = 10;
+  static const starsToUnlockHard    = 15;
 
   static const maxEnergyFree        = 15;
   static const maxEnergyPremium     = 50;
@@ -104,8 +104,16 @@ class QRepo {
       (jsonDecode(j) as List).map((e)=>Question.fromMap(e)).toList();
   static List<Question> forDiff(Diff d) => [easy,medium,hard][d.index];
   static List<Question> forLevel(int idx, Diff d) {
-    final pool = List<Question>.from(forDiff(d))..shuffle(Random(idx*31+d.index*7));
-    return pool.take(Cfg.questionsPerLevel).toList();
+    final all = forDiff(d);
+    final perLevel = Cfg.questionsPerLevel;
+    // כל שלב מקבל בלוק קבוע של שאלות, אבל הסדר מתערבל אקראי בכל משחק
+    final start = (idx * perLevel) % all.length;
+    final pool = <Question>[];
+    for (int i = 0; i < perLevel; i++) {
+      pool.add(all[(start + i) % all.length]);
+    }
+    pool.shuffle();
+    return pool;
   }
   static int levelCount(Diff d) => max(1,(forDiff(d).length/Cfg.questionsPerLevel).floor());
   static List<Question> all(bool prem) =>
@@ -1090,7 +1098,11 @@ class _LevelNode extends StatelessWidget {
               boxShadow:unlocked?[BoxShadow(color:(perfect?Pal.gold:diff.color).withOpacity(0.4),blurRadius:18,spreadRadius:2)]:null),
             child:Center(child:unlocked
               ?Text('${index+1}',style:const TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w900))
-              :const Icon(Icons.lock_rounded,color:Pal.ts,size:22))),
+              :Column(mainAxisSize:MainAxisSize.min,children:[
+                  const Icon(Icons.lock_rounded,color:Pal.ts,size:16),
+                  const SizedBox(height:1),
+                  Text('${index*Cfg.starsToUnlockNext}⭐',style:const TextStyle(color:Pal.ts,fontSize:9,fontWeight:FontWeight.w700)),
+                ]))),
         ]))),
     ]));
   }
