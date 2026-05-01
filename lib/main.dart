@@ -137,6 +137,40 @@ class QRepo {
 }
 
 // ═══════════════════════════════════════════════
+//  MISTAKES SERVICE
+// ═══════════════════════════════════════════════
+class MistakesService {
+  static final MistakesService _i = MistakesService._();
+  static MistakesService get instance => _i;
+  MistakesService._();
+  List<Question> _list = [];
+  List<Question> get list => List.unmodifiable(_list);
+
+  static Future<void> init() async {
+    final p = await SharedPreferences.getInstance();
+    final raw = p.getStringList('mistakes_v2') ?? [];
+    _i._list = raw.map((s) {
+      try { return Question.fromMap(jsonDecode(s) as Map<String,dynamic>); }
+      catch(_) { return null; }
+    }).whereType<Question>().toList();
+  }
+
+  void add(Question q) {
+    _list.removeWhere((m) => m.id == q.id);
+    _list.insert(0, q);
+    if (_list.length > 10) _list = _list.sublist(0, 10);
+    _save();
+  }
+
+  Future<void> _save() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setStringList('mistakes_v2', _list.map((q) =>
+      jsonEncode({'id':q.id,'category':q.category,'q':q.q,'a':q.a,'c':q.c,'d':q.diff.index+1,'f':q.f})
+    ).toList());
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  LEVEL SERVICE
 // ═══════════════════════════════════════════════
 class LevelService extends ChangeNotifier {
@@ -356,9 +390,11 @@ class GameState extends ChangeNotifier {
   void _timeout() async {
     await Sfx.wrong(); _wrong++; _stars=(Cfg.starsPerLevel-_wrong).clamp(0,3);
     _sel=-1; _fb=true;
-    await EnergyService.instance.spend(Cfg.energyCostWrong); notifyListeners();
+    await EnergyService.instance.spend(Cfg.energyCostWrong);
+    MistakesService.instance.add(cur);
+    notifyListeners();
     if(_wrong>Cfg.maxWrongPerLevel){await Sfx.fail();await EnergyService.instance.spend(Cfg.energyCostFail);await Future.delayed(const Duration(milliseconds:1500));_phase=Phase.failed;notifyListeners();return;}
-    await Future.delayed(const Duration(milliseconds:1800));
+    await Future.delayed(const Duration(milliseconds:3600));
     _fb=false;_sel=null;
     if(_qi<total-1){_qi++;_startTimer();}else{await _finish();}
     notifyListeners();
@@ -366,11 +402,12 @@ class GameState extends ChangeNotifier {
   void answer(int idx) async {
     if(_fb)return; _t?.cancel(); _sel=idx; _fb=true; notifyListeners();
     final ok=idx==cur.c;
-    if(ok){await Sfx.correct();QRepo.markSeen(cur.id,diff);await Future.delayed(const Duration(milliseconds:1600));}
+    if(ok){await Sfx.correct();QRepo.markSeen(cur.id,diff);await Future.delayed(const Duration(milliseconds:3200));}
     else{
       await Sfx.wrong(); _wrong++; _stars=(Cfg.starsPerLevel-_wrong).clamp(0,3);
       await EnergyService.instance.spend(Cfg.energyCostWrong);
-      await Future.delayed(const Duration(milliseconds:1800));
+      MistakesService.instance.add(cur);
+      await Future.delayed(const Duration(milliseconds:3600));
       if(_wrong>Cfg.maxWrongPerLevel){await Sfx.fail();await EnergyService.instance.spend(Cfg.energyCostFail);_phase=Phase.failed;notifyListeners();return;}
     }
     _fb=false;_sel=null;
@@ -405,7 +442,7 @@ class Pal {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp,DeviceOrientation.portraitDown]);
-  await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen();
+  await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
     await MobileAds.instance.initialize();
@@ -769,6 +806,18 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
             ShaderMask(shaderCallback:(b)=>const LinearGradient(colors:[Pal.gold,Color(0xFFFF9F0A)]).createShader(b),
               child:const Text('\u05D9\u05D3\u05E2\u05DF',style:TextStyle(fontSize:36,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:3))),
             const Spacer(),
+            GestureDetector(
+              onTap: () => Navigator.push(context, _slide(const MistakesScreen())),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(color: Pal.red.withOpacity(0.15), borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Pal.red.withOpacity(0.4))),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('❌', style: TextStyle(fontSize: 14)),
+                  SizedBox(width: 4),
+                  Text('שגיאות', style: TextStyle(color: Pal.red, fontSize: 12, fontWeight: FontWeight.w700)),
+                ]))),
+            const SizedBox(width: 8),
             const EnergyChip(),
           ])),
         const SizedBox(height:12),
@@ -1598,6 +1647,71 @@ class _RestartDlg extends StatelessWidget {
             child:const Padding(padding:EdgeInsets.symmetric(vertical:12),child:Text('\u05D4\u05EA\u05D7\u05DC',style:TextStyle(color:Pal.green,fontWeight:FontWeight.w700))))),
         ]),
       ])));
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  MISTAKES SCREEN
+// ═══════════════════════════════════════════════
+class MistakesScreen extends StatelessWidget {
+  const MistakesScreen({super.key});
+  @override Widget build(BuildContext context) {
+    final list = MistakesService.instance.list;
+    return Scaffold(
+      backgroundColor: Pal.bgD,
+      appBar: AppBar(
+        backgroundColor: Pal.bgD,
+        title: const Text('❌  שגיאות אחרונות', style: TextStyle(color: Pal.tp, fontWeight: FontWeight.w800)),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Pal.tp), onPressed: () => Navigator.pop(context)),
+      ),
+      body: list.isEmpty
+        ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('🎉', style: TextStyle(fontSize: 48)),
+            SizedBox(height: 12),
+            Text('עדיין אין שגיאות!', style: TextStyle(color: Pal.tp, fontSize: 18, fontWeight: FontWeight.w700)),
+            SizedBox(height: 6),
+            Text('כל הכבוד, המשך כך', style: TextStyle(color: Pal.ts, fontSize: 14)),
+          ]))
+        : ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: list.length,
+            itemBuilder: (_, i) {
+              final q = list[i];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Pal.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Pal.red.withOpacity(0.4), width: 1.2)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: Pal.red.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                      child: Text(q.category, style: const TextStyle(color: Pal.red, fontSize: 11, fontWeight: FontWeight.w700))),
+                    const SizedBox(width: 8),
+                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: q.diff.color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                      child: Text(q.diff.label, style: TextStyle(color: q.diff.color, fontSize: 11, fontWeight: FontWeight.w700))),
+                  ]),
+                  const SizedBox(height: 10),
+                  Text(q.q, style: const TextStyle(color: Pal.tp, fontSize: 15, fontWeight: FontWeight.w600, height: 1.4)),
+                  const SizedBox(height: 10),
+                  Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(color: Pal.green.withOpacity(0.12), borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Pal.green.withOpacity(0.4))),
+                    child: Row(children: [
+                      const Text('✅ ', style: TextStyle(fontSize: 14)),
+                      Expanded(child: Text(q.a[q.c], style: const TextStyle(color: Pal.green, fontSize: 14, fontWeight: FontWeight.w700))),
+                    ])),
+                  if (q.f != null) ...[
+                    const SizedBox(height: 8),
+                    Text(q.f!, style: const TextStyle(color: Pal.ts, fontSize: 12, height: 1.5)),
+                  ],
+                ]),
+              );
+            }),
+    );
   }
 }
 
