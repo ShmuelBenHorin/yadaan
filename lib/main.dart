@@ -1039,7 +1039,7 @@ class _DiffCard extends StatelessWidget {
               const SizedBox(height:4),
               Text(unlocked?'${QRepo.levelCount(diff)} \u05E9\u05DC\u05D1\u05D9\u05DD \u00B7 $earned/$maxS \u2B50'
                 :(isPrem?'\u05E6\u05E8\u05D9\u05DA \u05E4\u05E8\u05D5 + $need \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD':'\u05E6\u05E8\u05D9\u05DA $need \u2B50 \u05DC\u05E4\u05EA\u05D9\u05D7\u05D4'),
-                style:const TextStyle(color:Pal.ts,fontSize:12)),
+                textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.ts,fontSize:12)),
               if(unlocked&&earned>0)...[const SizedBox(height:8),ClipRRect(borderRadius:BorderRadius.circular(4),
                 child:LinearProgressIndicator(value:earned/maxS,minHeight:4,backgroundColor:Pal.starOff,valueColor:AlwaysStoppedAnimation(diff.color)))],
             ])),
@@ -1051,147 +1051,293 @@ class _DiffCard extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════
-//  LEVEL MAP — Snake path with diff transitions
 // ═══════════════════════════════════════════════
+//  LEVEL MAP — Mountain trail design
+// ═══════════════════════════════════════════════
+
+const _kNodeR = 30.0;
+const _kRowH  = 120.0;
+const _kPadV  = 80.0;
+
+double _lvlX(int idx, double w) {
+  // More dramatic winding — wide oscillation left↔right
+  const f = [0.35, 0.70, 0.25, 0.65, 0.30, 0.72, 0.22, 0.58, 0.38, 0.68];
+  return w * f[idx % f.length];
+}
+
 class LevelMapScreen extends StatelessWidget {
   final Diff diff;
   const LevelMapScreen({super.key,required this.diff});
   @override Widget build(BuildContext context){
     return ListenableBuilder(listenable:LevelService.instance,builder:(_,__){
+      final ls=LevelService.instance;
       final count=QRepo.levelCount(diff);
-      // Check if next diff is unlocked to show transition node
+      final earned=ls.totalStars(diff);
+      final maxS=count*Cfg.starsPerLevel;
       final nextDiff=diff==Diff.easy?Diff.medium:diff==Diff.medium?Diff.hard:null;
-      final nextUnlocked=nextDiff!=null&&LevelService.instance.isDiffUnlocked(nextDiff);
-      return Scaffold(backgroundColor:Pal.bgD,body:Stack(children:[
-        const StarField(),
+      final nextUnlocked=nextDiff!=null&&ls.isDiffUnlocked(nextDiff);
+      int nextIdx=-1;
+      for(int i=0;i<count;i++){if(ls.isLevelUnlocked(diff,i)&&ls.starsFor(diff,i)==0){nextIdx=i;break;}}
+      return Scaffold(backgroundColor:const Color(0xFF060A1A),body:Stack(children:[
+        const _MountainBg(),
         SafeArea(child:Column(children:[
           Padding(padding:const EdgeInsets.fromLTRB(16,12,16,0),
             child:Row(children:[
               _iconBtn(Icons.arrow_back,()=>Navigator.pop(context)),
               const SizedBox(width:12),
-              Text('\u05E8\u05DE\u05D4 ${diff.label}',style:TextStyle(color:diff.color,fontSize:22,fontWeight:FontWeight.w800)),
+              Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text(diff.label,style:TextStyle(color:diff.color,fontSize:22,fontWeight:FontWeight.w800)),
+                Text('$earned / $maxS ⭐',style:const TextStyle(color:Pal.ts,fontSize:11)),
+              ]),
               const Spacer(),
               const EnergyChip(),
             ])),
-          Padding(padding:const EdgeInsets.fromLTRB(20,12,20,0),child:_StarsBar()),
-          const SizedBox(height:8),
-          Expanded(child:SingleChildScrollView(
-            reverse:true,
-            padding:const EdgeInsets.symmetric(horizontal:20,vertical:20),
-            child:Column(children:[
-              // Next difficulty unlock node at top
-              if(nextDiff!=null)_DiffTransitionNode(nextDiff:nextDiff,unlocked:nextUnlocked,currentDiff:diff),
-              // Level nodes (reversed so 1 is at bottom)
-              ...List.generate(count,(rawIdx){
-                final idx=count-1-rawIdx;
-                return _LevelNode(diff:diff,index:idx,count:count);
-              }),
-            ]))),
+          Padding(padding:const EdgeInsets.fromLTRB(20,8,20,0),
+            child:ClipRRect(borderRadius:BorderRadius.circular(6),
+              child:LinearProgressIndicator(value:maxS>0?earned/maxS:0,
+                backgroundColor:Pal.card,valueColor:AlwaysStoppedAnimation(diff.color),minHeight:6))),
+          Expanded(child:LayoutBuilder(builder:(ctx,cstr){
+            final w=cstr.maxWidth;
+            final extra=nextDiff!=null?90.0:0.0;
+            final mapH=count*_kRowH+_kPadV*2+extra;
+            final positions=List.generate(count,(i)=>Offset(_lvlX(i,w),mapH-_kPadV-i*_kRowH));
+            return SingleChildScrollView(
+              reverse:true,
+              child:SizedBox(width:w,height:mapH,
+                child:Stack(clipBehavior:Clip.none,children:[
+                  Positioned.fill(child:CustomPaint(
+                    painter:_TrailPainter(positions:positions,count:count,ls:ls,diff:diff))),
+                  ...List.generate(count,(i){
+                    final p=positions[i];
+                    return Positioned(
+                      left:p.dx-40,top:p.dy-55,
+                      child:_TrailNode(
+                        diff:diff,index:i,
+                        unlocked:ls.isLevelUnlocked(diff,i),
+                        stars:ls.starsFor(diff,i),
+                        perfect:ls.starsFor(diff,i)==Cfg.starsPerLevel,
+                        isNext:i==nextIdx,
+                        onTap:(){
+                          if(!ls.isLevelUnlocked(diff,i))return;
+                          if(!EnergyService.instance.has){Navigator.push(ctx,_slide(const NoEnergyScreen()));return;}
+                          EnergyService.instance.spend(Cfg.energyCostWrong);
+                          Navigator.push(ctx,_slide(GameScreen(diff:diff,levelIndex:i)));
+                        }));
+                  }),
+                  if(nextDiff!=null)Positioned(
+                    top:16,left:w*0.5-100,width:200,
+                    child:_DiffTransitionNode(nextDiff:nextDiff,unlocked:nextUnlocked,currentDiff:diff)),
+                ])));
+          })),
         ])),
       ]));
     });
   }
 }
 
-// Node showing transition to next difficulty
-class _DiffTransitionNode extends StatelessWidget {
-  final Diff nextDiff,currentDiff;
-  final bool unlocked;
-  const _DiffTransitionNode({required this.nextDiff,required this.currentDiff,required this.unlocked});
-  @override Widget build(BuildContext context){
-    return Padding(padding:const EdgeInsets.only(bottom:8),
-      child:Column(children:[
-        Container(height:40,child:Center(child:Container(width:3,color:unlocked?nextDiff.color.withOpacity(0.5):Pal.ts.withOpacity(0.2)))),
-        GestureDetector(
-          onTap:unlocked?()=>Navigator.pushReplacement(context,_slide(LevelMapScreen(diff:nextDiff))):null,
-          child:Container(
-            padding:const EdgeInsets.symmetric(horizontal:20,vertical:14),
-            decoration:BoxDecoration(
-              gradient:unlocked?LinearGradient(colors:[nextDiff.color.withOpacity(0.3),nextDiff.color.withOpacity(0.1)]):null,
-              color:unlocked?null:Pal.card.withOpacity(0.5),
-              borderRadius:BorderRadius.circular(20),
-              border:Border.all(color:unlocked?nextDiff.color:Pal.ts.withOpacity(0.3),width:unlocked?2:1)),
-            child:Row(mainAxisSize:MainAxisSize.min,children:[
-              Text(unlocked?nextDiff.emoji:'\u{1F512}',style:const TextStyle(fontSize:20)),
-              const SizedBox(width:10),
-              Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Text('\u05E8\u05DE\u05D4 ${nextDiff.label}',style:TextStyle(color:unlocked?Pal.tp:Pal.ts,fontSize:15,fontWeight:FontWeight.w800)),
-                Text(unlocked?'\u05DC\u05D7\u05E5 \u05DC\u05E4\u05EA\u05D9\u05D7\u05D4 \u25B6':'\u05E6\u05E8\u05D9\u05DA ${nextDiff==Diff.medium?Cfg.starsToUnlockMedium:Cfg.starsToUnlockHard} \u2B50 \u05DC\u05E4\u05EA\u05D9\u05D7\u05D4',
-                  style:const TextStyle(color:Pal.ts,fontSize:11)),
-              ]),
-            ]))),
-      ]));
-  }
+// ── Mountain background ─────────────────────────────
+class _MountainBg extends StatelessWidget {
+  const _MountainBg();
+  @override Widget build(BuildContext context)=>SizedBox.expand(child:CustomPaint(painter:_MtnPainter()));
 }
 
-class _LevelNode extends StatelessWidget {
-  final Diff diff; final int index,count;
-  const _LevelNode({required this.diff,required this.index,required this.count});
-  @override Widget build(BuildContext context){
-    final ls=LevelService.instance;
-    final unlocked=ls.isLevelUnlocked(diff,index);
-    final stars=ls.starsFor(diff,index);
-    final perfect=stars==Cfg.starsPerLevel;
-    // Snake: 3 columns, alternating direction per row
-    final row=index~/3;
-    final col=index%3;
-    final positions=[0.15,0.5,0.85];
-    final posX=row%2==0?positions[col]:positions[2-col];
-    final align=Alignment(posX*2-1,0);
-    return SizedBox(height:110,child:Stack(children:[
-      if(index<count-1)Positioned.fill(child:CustomPaint(
-        painter:_ConPainter(from:align,
-          to:(){final ni=index+1;final nr=ni~/3;final nc=ni%3;final px=nr%2==0?positions[nc]:positions[2-nc];return Alignment(px*2-1,0);}(),
-          color:unlocked?diff.color.withOpacity(0.4):Pal.ts.withOpacity(0.15),dashed:!unlocked))),
-      Align(alignment:align,child:GestureDetector(
-        onTap:(){
-          if(!unlocked)return;
-          if(!EnergyService.instance.has){Navigator.push(context,_slide(const NoEnergyScreen()));return;}
-          EnergyService.instance.spend(Cfg.energyCostWrong); // כניסה לשלב עולה 1 אנרגיה
-          Navigator.push(context,_slide(GameScreen(diff:diff,levelIndex:index)));
-        },
-        child:Column(mainAxisSize:MainAxisSize.min,children:[
-          if(unlocked&&stars>0)Row(mainAxisSize:MainAxisSize.min,children:List.generate(3,(i)=>Text(i<stars?'\u2B50':'\u2606',style:TextStyle(fontSize:11,color:i<stars?Pal.starOn:Pal.starOff)))),
-          const SizedBox(height:2),
-          AnimatedContainer(duration:const Duration(milliseconds:300),
-            width:unlocked?68:58,height:unlocked?68:58,
-            decoration:BoxDecoration(shape:BoxShape.circle,
-              gradient:unlocked?LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
-                colors:perfect?[Pal.gold,const Color(0xFFFF9F0A)]:[diff.color,diff.color.withOpacity(0.7)]):null,
-              color:unlocked?null:Pal.card,
-              border:Border.all(color:perfect?Pal.gold:unlocked?diff.color:Pal.ts.withOpacity(0.3),width:perfect?3:2),
-              boxShadow:unlocked?[BoxShadow(color:(perfect?Pal.gold:diff.color).withOpacity(0.4),blurRadius:18,spreadRadius:2)]:null),
-            child:Center(child:unlocked
-              ?Text('${index+1}',style:const TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w900))
-              :Column(mainAxisSize:MainAxisSize.min,children:[
-                  const Icon(Icons.lock_rounded,color:Pal.ts,size:16),
-                  const SizedBox(height:1),
-                  Text('${index*Cfg.starsToUnlockNext}⭐',style:const TextStyle(color:Pal.ts,fontSize:9,fontWeight:FontWeight.w700)),
-                ]))),
-        ]))),
-    ]));
-  }
-}
+class _MtnPainter extends CustomPainter {
+  @override void paint(Canvas canvas,Size size){
+    final w=size.width,h=size.height;
 
-class _ConPainter extends CustomPainter {
-  final Alignment from,to; final Color color; final bool dashed;
-  const _ConPainter({required this.from,required this.to,required this.color,this.dashed=false});
-  @override void paint(Canvas c,Size s){
-    final p=Paint()..color=color..strokeWidth=3..style=PaintingStyle.stroke..strokeCap=StrokeCap.round;
-    final f=Offset((from.x+1)/2*s.width,s.height);
-    final t=Offset((to.x+1)/2*s.width,0);
-    if(!dashed){
-      final path=Path()..moveTo(f.dx,f.dy)..cubicTo(f.dx,f.dy-s.height*0.4,t.dx,t.dy+s.height*0.4,t.dx,t.dy);
-      c.drawPath(path,p);
-    }else{
-      final tot=(t-f).distance;final dir=(t-f)/tot;double drawn=0;bool on=true;
-      while(drawn<tot){final seg=on?8.0:6.0;final end=min(drawn+seg,tot);if(on)c.drawLine(f+dir*drawn,f+dir*end,p);drawn=end;on=!on;}
+    // ── Sky gradient ──────────────────────────────
+    canvas.drawRect(Rect.fromLTWH(0,0,w,h),Paint()
+      ..shader=const LinearGradient(
+        begin:Alignment.topCenter,end:Alignment.bottomCenter,
+        colors:[Color(0xFF04060F),Color(0xFF060A1A),Color(0xFF091230)])
+        .createShader(Rect.fromLTWH(0,0,w,h)));
+
+    // ── Stars (random dots) ───────────────────────
+    final rng=List.generate(60,(i)=>i);
+    for(final i in rng){
+      final x=(i*137.5%w);
+      final y=(i*89.3%( h*0.7));
+      final r=(i%3==0)?1.4:(i%3==1)?0.9:0.6;
+      canvas.drawCircle(Offset(x,y),r,Paint()..color=Colors.white.withOpacity(0.15+(i%5)*0.07));
     }
+
+    // ── Far mountains (faintest) ──────────────────
+    _mtn(canvas,[
+      Offset(0,h),Offset(0,h*0.75),
+      Offset(w*0.08,h*0.75),Offset(w*0.15,h*0.30),Offset(w*0.22,h*0.68),
+      Offset(w*0.32,h*0.60),Offset(w*0.40,h*0.22),Offset(w*0.48,h*0.62),
+      Offset(w*0.58,h*0.55),Offset(w*0.67,h*0.18),Offset(w*0.75,h*0.58),
+      Offset(w*0.84,h*0.50),Offset(w*0.92,h*0.28),Offset(w,h*0.55),
+      Offset(w,h),
+    ],const Color(0xFF0D1A40));
+
+    // ── Mid mountains ─────────────────────────────
+    _mtn(canvas,[
+      Offset(0,h),Offset(0,h*0.82),
+      Offset(w*0.10,h*0.82),Offset(w*0.18,h*0.45),Offset(w*0.26,h*0.72),
+      Offset(w*0.36,h*0.65),Offset(w*0.45,h*0.35),Offset(w*0.54,h*0.68),
+      Offset(w*0.63,h*0.60),Offset(w*0.72,h*0.38),Offset(w*0.80,h*0.65),
+      Offset(w*0.89,h*0.55),Offset(w,h*0.68),Offset(w,h),
+    ],const Color(0xFF091025));
+
+    // ── Near mountains (darkest foreground) ───────
+    _mtn(canvas,[
+      Offset(0,h),Offset(0,h*0.88),
+      Offset(w*0.12,h*0.88),Offset(w*0.20,h*0.58),Offset(w*0.28,h*0.80),
+      Offset(w*0.38,h*0.74),Offset(w*0.47,h*0.55),Offset(w*0.56,h*0.76),
+      Offset(w*0.65,h*0.68),Offset(w*0.74,h*0.52),Offset(w*0.82,h*0.72),
+      Offset(w*0.91,h*0.63),Offset(w,h*0.75),Offset(w,h),
+    ],const Color(0xFF060810));
+
+    // ── Bottom fog ────────────────────────────────
+    canvas.drawRect(Rect.fromLTWH(0,h*0.75,w,h*0.25),Paint()
+      ..shader=LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,
+        colors:[Colors.transparent,const Color(0xFF0D1840).withOpacity(0.55)])
+        .createShader(Rect.fromLTWH(0,h*0.75,w,h*0.25)));
   }
+
+  // Sharp lineTo peaks — no bezier smoothing so peaks stay pointy
+  void _mtn(Canvas c,List<Offset> pts,Color col){
+    final path=Path()..moveTo(pts[0].dx,pts[0].dy);
+    for(int i=1;i<pts.length;i++) path.lineTo(pts[i].dx,pts[i].dy);
+    path.close();
+    c.drawPath(path,Paint()..color=col);
+  }
+
   @override bool shouldRepaint(_)=>false;
 }
 
-// ═══════════════════════════════════════════════
+// ── Trail path painter ──────────────────────────────
+class _TrailPainter extends CustomPainter {
+  final List<Offset> positions;
+  final int count;
+  final LevelService ls;
+  final Diff diff;
+  _TrailPainter({required this.positions,required this.count,required this.ls,required this.diff});
+  @override void paint(Canvas canvas,Size size){
+    for(int i=0;i<count-1;i++){
+      final a=positions[i],b=positions[i+1];
+      final unlocked=ls.isLevelUnlocked(diff,i);
+      // S-curve bezier between nodes
+      final dy=a.dy-b.dy;
+      final path=Path()..moveTo(a.dx,a.dy)
+        ..cubicTo(a.dx,a.dy-dy*0.45,b.dx,b.dy+dy*0.45,b.dx,b.dy);
+      if(unlocked){
+        canvas.drawPath(path,Paint()..color=diff.color.withOpacity(0.12)..strokeWidth=22
+          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round
+          ..maskFilter=const MaskFilter.blur(BlurStyle.normal,12));
+        canvas.drawPath(path,Paint()..color=diff.color.withOpacity(0.28)..strokeWidth=9
+          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round
+          ..maskFilter=const MaskFilter.blur(BlurStyle.normal,5));
+        canvas.drawPath(path,Paint()..color=diff.color.withOpacity(0.90)..strokeWidth=3.5
+          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round);
+      }else{
+        // Dashed locked path
+        final tot=(b-a).distance;
+        final dir=(b-a)/tot;
+        double d=0;bool on=true;
+        final p=Paint()..color=Pal.ts.withOpacity(0.22)..strokeWidth=2
+          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round;
+        while(d<tot){
+          final seg=on?9.0:5.0;
+          final end=min(d+seg,tot);
+          if(on)canvas.drawLine(a+dir*d,a+dir*end,p);
+          d=end;on=!on;
+        }
+      }
+    }
+  }
+  @override bool shouldRepaint(_)=>true;
+}
+
+// ── Trail node widget ───────────────────────────────
+class _TrailNode extends StatelessWidget {
+  final Diff diff;final int index,stars;
+  final bool unlocked,perfect,isNext;
+  final VoidCallback onTap;
+  const _TrailNode({required this.diff,required this.index,required this.unlocked,
+    required this.stars,required this.perfect,required this.isNext,required this.onTap});
+  @override Widget build(BuildContext context){
+    final nc=perfect?Pal.gold:diff.color;
+    const r=_kNodeR,d=r*2;
+    return GestureDetector(
+      onTap:onTap,
+      child:SizedBox(width:d+20,
+        child:Column(mainAxisSize:MainAxisSize.min,children:[
+          SizedBox(height:22,child:Center(child:
+            isNext
+              ?Container(
+                  padding:const EdgeInsets.symmetric(horizontal:9,vertical:3),
+                  decoration:BoxDecoration(color:diff.color,borderRadius:BorderRadius.circular(10),
+                    boxShadow:[BoxShadow(color:diff.color.withOpacity(0.6),blurRadius:12,spreadRadius:1)]),
+                  child:const Text('השלב הנוכחי',style:TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w700)))
+              :(unlocked&&stars>0
+                  ?Row(mainAxisSize:MainAxisSize.min,children:List.generate(Cfg.starsPerLevel,(i)=>Icon(
+                      i<stars?Icons.star_rounded:Icons.star_border_rounded,
+                      size:13,color:i<stars?Pal.starOn:Pal.starOff.withOpacity(0.3))))
+                  :const SizedBox.shrink()))),
+          const SizedBox(height:3),
+          Container(
+            width:d,height:d,
+            decoration:BoxDecoration(shape:BoxShape.circle,
+              boxShadow:unlocked?[BoxShadow(color:nc.withOpacity(isNext?0.70:0.40),
+                blurRadius:isNext?32:18,spreadRadius:isNext?6:2)]:null),
+            child:Container(
+              decoration:BoxDecoration(shape:BoxShape.circle,
+                gradient:unlocked?LinearGradient(
+                  begin:const Alignment(-0.4,-0.8),end:const Alignment(0.4,0.8),
+                  colors:perfect?[const Color(0xFFFFE066),const Color(0xFFFF9F0A)]:[nc,nc.withOpacity(0.6)]):null,
+                color:unlocked?null:const Color(0xFF141828),
+                border:Border.all(
+                  color:perfect?const Color(0xFFFFD700):unlocked?nc.withOpacity(0.9):Pal.ts.withOpacity(0.22),
+                  width:perfect?2.5:2)),
+              child:Stack(alignment:Alignment.center,children:[
+                if(unlocked)Positioned(top:6,left:9,
+                  child:Container(width:16,height:7,
+                    decoration:BoxDecoration(borderRadius:BorderRadius.circular(8),
+                      color:Colors.white.withOpacity(0.26)))),
+                unlocked
+                  ?Text('${index+1}',style:const TextStyle(color:Colors.white,fontSize:20,
+                      fontWeight:FontWeight.w900,shadows:[Shadow(color:Colors.black38,blurRadius:4)]))
+                  :Column(mainAxisSize:MainAxisSize.min,children:[
+                      Icon(Icons.lock_rounded,color:Pal.ts.withOpacity(0.5),size:14),
+                      const SizedBox(height:1),
+                      Text('${index*Cfg.starsToUnlockNext}⭐',
+                        style:TextStyle(color:Pal.ts.withOpacity(0.45),fontSize:8,fontWeight:FontWeight.w700)),
+                    ]),
+              ]))),
+        ])));
+  }
+}
+
+// ── Diff transition node ────────────────────────────
+class _DiffTransitionNode extends StatelessWidget {
+  final Diff nextDiff,currentDiff;final bool unlocked;
+  const _DiffTransitionNode({required this.nextDiff,required this.currentDiff,required this.unlocked});
+  @override Widget build(BuildContext context){
+    return GestureDetector(
+      onTap:unlocked?()=>Navigator.pushReplacement(context,_slide(LevelMapScreen(diff:nextDiff))):null,
+      child:Container(
+        padding:const EdgeInsets.symmetric(horizontal:16,vertical:12),
+        decoration:BoxDecoration(
+          gradient:unlocked?LinearGradient(colors:[nextDiff.color.withOpacity(0.25),nextDiff.color.withOpacity(0.08)]):null,
+          color:unlocked?null:Pal.card.withOpacity(0.4),
+          borderRadius:BorderRadius.circular(20),
+          border:Border.all(color:unlocked?nextDiff.color.withOpacity(0.7):Pal.ts.withOpacity(0.2),width:unlocked?2:1),
+          boxShadow:unlocked?[BoxShadow(color:nextDiff.color.withOpacity(0.3),blurRadius:16)]:null),
+        child:Row(mainAxisSize:MainAxisSize.min,mainAxisAlignment:MainAxisAlignment.center,children:[
+          Text(unlocked?nextDiff.emoji:'🔒',style:const TextStyle(fontSize:20)),
+          const SizedBox(width:10),
+          Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(nextDiff.label,style:TextStyle(color:unlocked?Pal.tp:Pal.ts,fontSize:14,fontWeight:FontWeight.w800)),
+            Text(unlocked?'לחץ לפתיחה ▶':'Need ${nextDiff==Diff.medium?Cfg.starsToUnlockMedium:Cfg.starsToUnlockHard} ⭐ to unlock',
+              style:TextStyle(color:unlocked?nextDiff.color:Pal.ts.withOpacity(0.6),fontSize:11)),
+          ]),
+        ])));
+  }
+}
+
+
 //  GAME SCREEN
 // ═══════════════════════════════════════════════
 class GameScreen extends StatefulWidget {
@@ -1342,7 +1488,7 @@ class _QCard extends StatelessWidget {
           Text(diff.label,style:TextStyle(color:diff.color,fontSize:10,fontWeight:FontWeight.w700)),
         ]),
         const SizedBox(height:12),
-        Text(q.q,style:const TextStyle(color:Pal.tp,fontSize:17,fontWeight:FontWeight.w700,height:1.35)),
+        Text(q.q,textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.tp,fontSize:17,fontWeight:FontWeight.w700,height:1.35)),
       ]));
   }
 }
@@ -1695,7 +1841,7 @@ class MistakesScreen extends StatelessWidget {
                       child: Text(q.diff.label, style: TextStyle(color: q.diff.color, fontSize: 11, fontWeight: FontWeight.w700))),
                   ]),
                   const SizedBox(height: 10),
-                  Text(q.q, style: const TextStyle(color: Pal.tp, fontSize: 15, fontWeight: FontWeight.w600, height: 1.4)),
+                  Text(q.q, textDirection: TextDirection.rtl, style: const TextStyle(color: Pal.tp, fontSize: 15, fontWeight: FontWeight.w600, height: 1.4)),
                   const SizedBox(height: 10),
                   Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(color: Pal.green.withOpacity(0.12), borderRadius: BorderRadius.circular(10),
@@ -1834,8 +1980,11 @@ class PaywallSheet extends StatefulWidget {
 }
 class _PS extends State<PaywallSheet>{
   bool _showCode=false;
+  String? _errMsg;
   final _ctrl=TextEditingController();
-  @override void dispose(){_ctrl.dispose();super.dispose();}
+  @override void initState(){super.initState();PurchaseService.instance.addListener(_rebuild);}
+  void _rebuild(){if(mounted)setState((){});}
+  @override void dispose(){PurchaseService.instance.removeListener(_rebuild);_ctrl.dispose();super.dispose();}
   @override Widget build(BuildContext context){
     final ps=PurchaseService.instance;
     return Container(
@@ -1887,15 +2036,23 @@ class _PS extends State<PaywallSheet>{
         ]))),
         Padding(padding:EdgeInsets.fromLTRB(24,0,24,MediaQuery.of(context).padding.bottom+16),
           child:Column(children:[
+            if(_errMsg!=null)Padding(padding:const EdgeInsets.only(bottom:10),
+              child:Text(_errMsg!,textAlign:TextAlign.center,
+                style:const TextStyle(color:Pal.red,fontSize:13))),
             if(ps.isLoading)
-              const CircularProgressIndicator(color:Pal.premium)
+              const Padding(padding:EdgeInsets.symmetric(vertical:12),
+                child:CircularProgressIndicator(color:Pal.premium))
             else GestureDetector(
               onTap:()async{
+                setState(()=>_errMsg=null);
                 await ps.loadOfferings();
-                if(ps.packages.isNotEmpty&&mounted){
-                  final ok=await ps.purchase(ps.packages.first);
-                  if(ok&&mounted)Navigator.pop(context);
+                if(!mounted)return;
+                if(ps.packages.isEmpty){
+                  setState(()=>_errMsg='לא ניתן לטעון מוצרים. בדוק חיבור לאינטרנט ונסה שוב.');
+                  return;
                 }
+                final ok=await ps.purchase(ps.packages.first);
+                if(ok&&mounted)Navigator.pop(context);
               },
               child:Container(width:double.infinity,
                 padding:const EdgeInsets.symmetric(vertical:18),
@@ -2425,7 +2582,7 @@ class _CatQCard extends StatelessWidget {
           decoration:BoxDecoration(color:q.diff.color.withOpacity(0.15),borderRadius:BorderRadius.circular(10)),
           child:Text(q.diff.label,style:TextStyle(color:q.diff.color,fontSize:11,fontWeight:FontWeight.w700))),
         const SizedBox(height:14),
-        Text(q.q,style:const TextStyle(color:Pal.tp,fontSize:20,fontWeight:FontWeight.w700,height:1.4)),
+        Text(q.q,textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.tp,fontSize:20,fontWeight:FontWeight.w700,height:1.4)),
       ]));
   }
 }
@@ -2458,7 +2615,7 @@ class _CatAnsBtnState extends State<_CatAnsBtn> with SingleTickerProviderStateMi
             Container(width:34,height:34,decoration:BoxDecoration(color:lc.withOpacity(0.15),borderRadius:BorderRadius.circular(10),border:Border.all(color:lc.withOpacity(0.5))),
               child:Center(child:Text(letters[widget.index],style:TextStyle(color:lc,fontWeight:FontWeight.w900,fontSize:15)))),
             const SizedBox(width:14),
-            Expanded(child:Text(widget.q.a[widget.index],style:TextStyle(color:widget.fb&&widget.index!=widget.q.c&&widget.index!=widget.sel?Pal.ts:Pal.tp,fontSize:16,fontWeight:FontWeight.w600))),
+            Expanded(child:Text(widget.q.a[widget.index],textDirection:TextDirection.rtl,style:TextStyle(color:widget.fb&&widget.index!=widget.q.c&&widget.index!=widget.sel?Pal.ts:Pal.tp,fontSize:16,fontWeight:FontWeight.w600))),
             if(widget.fb)Text(widget.index==widget.q.c?'✅':widget.index==widget.sel?'❌':'',style:const TextStyle(fontSize:18)),
           ]))));
   }
