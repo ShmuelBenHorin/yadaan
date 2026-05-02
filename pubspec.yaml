@@ -1,7 +1,7 @@
 name: yidaan
 description: "ידען — חידון שלבים"
 publish_to: 'none'
-version: 1.2.0+7
+version: 1.2.0+8
 
 environment:
   sdk: ^3.11.1
