@@ -5,7 +5,7 @@ workflows:
     instance_type: mac_mini_m1
 
     integrations:
-      app_store_connect: shmuel
+      app_store_connect: me
 
     environment:
       flutter: stable
@@ -16,7 +16,7 @@ workflows:
           - yadaan_pr
         certificates:
           - car_ce
-        bundle_identifier: master.trivia
+        bundle_identifier: trivia.master
 
     scripts:
       - name: Get Flutter packages
