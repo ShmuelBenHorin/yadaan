@@ -1495,7 +1495,7 @@ class _FactBanner extends StatelessWidget {
           Text(ok?'\u2705':'\u274C',style:const TextStyle(fontSize:16)),const SizedBox(width:10),
           Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(ok?'\u05E0\u05DB\u05D5\u05DF!':'\u05EA\u05E9\u05D5\u05D1\u05D4: ${q.a[q.c]}',style:TextStyle(color:c,fontWeight:FontWeight.w800,fontSize:13)),
-            if(q.f!=null)...[const SizedBox(height:4),Text(q.f!,style:const TextStyle(color:Pal.ts,fontSize:12,height:1.4))],
+            if(q.f!=null)...[const SizedBox(height:4),Text(q.f!,textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.ts,fontSize:12,height:1.4))],
           ])),
         ])));
   }
@@ -1842,7 +1842,7 @@ class MistakesScreen extends StatelessWidget {
                     ])),
                   if (q.f != null) ...[
                     const SizedBox(height: 8),
-                    Text(q.f!, style: const TextStyle(color: Pal.ts, fontSize: 12, height: 1.5)),
+                    Text(q.f!, textDirection: TextDirection.rtl, style: const TextStyle(color: Pal.ts, fontSize: 12, height: 1.5)),
                   ],
                 ]),
               );
@@ -2354,7 +2354,7 @@ class _CQState extends State<CategoryQuizScreen> with TickerProviderStateMixin {
                           style:TextStyle(color:_sel==_cur.c?Pal.green:Pal.red,
                             fontWeight:FontWeight.w800,fontSize:13)),
                         const SizedBox(height:4),
-                        Text(_cur.f!,style:const TextStyle(color:Pal.ts,fontSize:12,height:1.4)),
+                        Text(_cur.f!,textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.ts,fontSize:12,height:1.4)),
                       ])),
                     ]))),
               const SizedBox(height:10),
