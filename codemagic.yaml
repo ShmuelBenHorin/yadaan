@@ -13,7 +13,7 @@ workflows:
       cocoapods: default
       ios_signing:
         provisioning_profiles:
-          - yadaan_pr
+          - trivia_he
         certificates:
           - car_ce
         bundle_identifier: master.trivia
