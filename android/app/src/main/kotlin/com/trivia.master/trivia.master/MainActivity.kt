@@ -1,4 +1,4 @@
-package trivia.master
+package master.trivia
 
 import io.flutter.embedding.android.FlutterActivity
 

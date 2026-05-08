@@ -13,7 +13,7 @@ if (keyPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "trivia.master"
+    namespace = "master.trivia"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "28.2.13676358"
 
@@ -27,7 +27,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "trivia.master"
+        applicationId = "master.trivia"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = 11
