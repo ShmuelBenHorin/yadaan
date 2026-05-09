@@ -2040,11 +2040,11 @@ class _PS extends State<PaywallSheet>{
             const SizedBox(height:8),
             Row(mainAxisAlignment:MainAxisAlignment.center,children:[
               GestureDetector(
-                onTap:()=>_launchUrl('https://shmuelbenhorin.github.io/privacy'),
+                onTap:()=>_launchUrl('https://sites.google.com/view/yadaan-privacy/%D7%91%D7%99%D7%AA'),
                 child:const Text('מדיניות פרטיות',style:TextStyle(color:Pal.ts,fontSize:11,decoration:TextDecoration.underline))),
               const Text('  |  ',style:TextStyle(color:Pal.ts,fontSize:11)),
               GestureDetector(
-                onTap:()=>_launchUrl('https://shmuelbenhorin.github.io/terms'),
+                onTap:()=>_launchUrl('https://sites.google.com/view/yadaan-privacy-policy/%D7%91%D7%99%D7%AA'),
                 child:const Text('תנאי שימוש',style:TextStyle(color:Pal.ts,fontSize:11,decoration:TextDecoration.underline))),
             ]),
             const SizedBox(height:8),
