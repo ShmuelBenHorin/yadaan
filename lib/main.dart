@@ -1255,61 +1255,98 @@ class _TrailPainter extends CustomPainter {
 }
 
 // ── Trail node widget ───────────────────────────────
-class _TrailNode extends StatelessWidget {
+class _TrailNode extends StatefulWidget {
   final Diff diff;final int index,stars;
   final bool unlocked,perfect,isNext;
   final VoidCallback onTap;
   const _TrailNode({required this.diff,required this.index,required this.unlocked,
     required this.stars,required this.perfect,required this.isNext,required this.onTap});
+  @override State<_TrailNode> createState()=>_TrailNodeState();
+}
+class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+  @override void initState(){
+    super.initState();
+    _pulse=AnimationController(vsync:this,duration:const Duration(milliseconds:1600));
+    if(widget.isNext)_pulse.repeat(reverse:true);
+  }
+  @override void dispose(){_pulse.dispose();super.dispose();}
   @override Widget build(BuildContext context){
-    final nc=perfect?Pal.gold:diff.color;
+    final nc=widget.perfect?Pal.gold:widget.diff.color;
     const r=_kNodeR,d=r*2;
     return GestureDetector(
-      onTap:onTap,
-      child:SizedBox(width:d+20,
+      onTap:widget.onTap,
+      child:SizedBox(width:d+30,
         child:Column(mainAxisSize:MainAxisSize.min,children:[
-          SizedBox(height:22,child:Center(child:
-            isNext
-              ?Container(
-                  padding:const EdgeInsets.symmetric(horizontal:9,vertical:3),
-                  decoration:BoxDecoration(color:diff.color,borderRadius:BorderRadius.circular(10),
-                    boxShadow:[BoxShadow(color:diff.color.withOpacity(0.6),blurRadius:12,spreadRadius:1)]),
-                  child:const Text('השלב הנוכחי',style:TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w700)))
-              :(unlocked&&stars>0
+          SizedBox(height:26,child:Center(child:
+            widget.isNext
+              ?AnimatedBuilder(animation:_pulse,builder:(_,__)=>Container(
+                  padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),
+                  decoration:BoxDecoration(
+                    gradient:LinearGradient(colors:[widget.diff.color,Color.lerp(widget.diff.color,Colors.white,0.25)!]),
+                    borderRadius:BorderRadius.circular(12),
+                    boxShadow:[BoxShadow(color:widget.diff.color.withOpacity(0.35+_pulse.value*0.45),
+                      blurRadius:10+_pulse.value*10,spreadRadius:1)]),
+                  child:const Text('▶  שחק',style:TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w800,letterSpacing:0.5))))
+              :(widget.unlocked&&widget.stars>0
                   ?Row(mainAxisSize:MainAxisSize.min,children:List.generate(Cfg.starsPerLevel,(i)=>Icon(
-                      i<stars?Icons.star_rounded:Icons.star_border_rounded,
-                      size:13,color:i<stars?Pal.starOn:Pal.starOff.withOpacity(0.3))))
+                      i<widget.stars?Icons.star_rounded:Icons.star_border_rounded,
+                      size:13,color:i<widget.stars?Pal.starOn:Pal.starOff.withOpacity(0.2))))
                   :const SizedBox.shrink()))),
-          const SizedBox(height:3),
-          Container(
-            width:d,height:d,
-            decoration:BoxDecoration(shape:BoxShape.circle,
-              boxShadow:unlocked?[BoxShadow(color:nc.withOpacity(isNext?0.70:0.40),
-                blurRadius:isNext?32:18,spreadRadius:isNext?6:2)]:null),
-            child:Container(
-              decoration:BoxDecoration(shape:BoxShape.circle,
-                gradient:unlocked?LinearGradient(
-                  begin:const Alignment(-0.4,-0.8),end:const Alignment(0.4,0.8),
-                  colors:perfect?[const Color(0xFFFFE066),const Color(0xFFFF9F0A)]:[nc,nc.withOpacity(0.6)]):null,
-                color:unlocked?null:const Color(0xFF141828),
-                border:Border.all(
-                  color:perfect?const Color(0xFFFFD700):unlocked?nc.withOpacity(0.9):Pal.ts.withOpacity(0.22),
-                  width:perfect?2.5:2)),
-              child:Stack(alignment:Alignment.center,children:[
-                if(unlocked)Positioned(top:6,left:9,
-                  child:Container(width:16,height:7,
-                    decoration:BoxDecoration(borderRadius:BorderRadius.circular(8),
-                      color:Colors.white.withOpacity(0.26)))),
-                unlocked
-                  ?Text('${index+1}',style:const TextStyle(color:Colors.white,fontSize:20,
-                      fontWeight:FontWeight.w900,shadows:[Shadow(color:Colors.black38,blurRadius:4)]))
-                  :Column(mainAxisSize:MainAxisSize.min,children:[
-                      Icon(Icons.lock_rounded,color:Pal.ts.withOpacity(0.5),size:14),
-                      const SizedBox(height:1),
-                      Text('${index*Cfg.starsToUnlockNext}⭐',
-                        style:TextStyle(color:Pal.ts.withOpacity(0.45),fontSize:8,fontWeight:FontWeight.w700)),
-                    ]),
-              ]))),
+          const SizedBox(height:4),
+          AnimatedBuilder(
+            animation:_pulse,
+            builder:(_,__){
+              final pv=widget.isNext?_pulse.value:0.0;
+              return Stack(alignment:Alignment.center,children:[
+                if(widget.isNext)...[
+                  Container(width:d+30+pv*22,height:d+30+pv*22,
+                    decoration:BoxDecoration(shape:BoxShape.circle,color:nc.withOpacity(0.07*(1-pv)))),
+                  Container(width:d+16+pv*12,height:d+16+pv*12,
+                    decoration:BoxDecoration(shape:BoxShape.circle,color:nc.withOpacity(0.13*(1-pv*0.5)))),
+                ],
+                Container(
+                  width:d,height:d,
+                  decoration:BoxDecoration(shape:BoxShape.circle,
+                    boxShadow:widget.unlocked?[
+                      BoxShadow(color:nc.withOpacity(widget.isNext?0.60+pv*0.40:widget.perfect?0.55:0.28),
+                        blurRadius:widget.isNext?28+pv*18:widget.perfect?22:13,
+                        spreadRadius:widget.isNext?4+pv*4:widget.perfect?3:1),
+                    ]:null),
+                  child:Container(
+                    decoration:BoxDecoration(shape:BoxShape.circle,
+                      gradient:widget.unlocked?LinearGradient(
+                        begin:const Alignment(-0.3,-0.7),end:const Alignment(0.5,0.8),
+                        colors:widget.perfect
+                          ?[const Color(0xFFFFEA80),const Color(0xFFFFB830),const Color(0xFFFF7A00)]
+                          :widget.isNext
+                            ?[Color.lerp(nc,Colors.white,0.35)!,nc,Color.lerp(nc,Colors.black,0.30)!]
+                            :[nc.withOpacity(0.9),nc.withOpacity(0.55)]):null,
+                      color:widget.unlocked?null:const Color(0xFF10152A),
+                      border:Border.all(
+                        color:widget.perfect?const Color(0xFFFFD700):widget.unlocked?nc.withOpacity(0.85):Pal.ts.withOpacity(0.16),
+                        width:widget.perfect?2.8:widget.isNext?2.2:1.8)),
+                    child:Stack(alignment:Alignment.center,children:[
+                      if(widget.unlocked)Positioned(top:5,left:8,
+                        child:Container(width:14,height:6,
+                          decoration:BoxDecoration(borderRadius:BorderRadius.circular(8),
+                            color:Colors.white.withOpacity(0.32)))),
+                      widget.unlocked
+                        ?widget.perfect
+                          ?const Text('👑',style:TextStyle(fontSize:22))
+                          :Text('${widget.index+1}',style:TextStyle(
+                              color:Colors.white,fontSize:widget.isNext?24:20,
+                              fontWeight:FontWeight.w900,
+                              shadows:const [Shadow(color:Colors.black45,blurRadius:6)]))
+                        :Column(mainAxisSize:MainAxisSize.min,children:[
+                            Icon(Icons.lock_rounded,color:Pal.ts.withOpacity(0.40),size:15),
+                            Text('${widget.index*Cfg.starsToUnlockNext}⭐',
+                              style:TextStyle(color:Pal.ts.withOpacity(0.38),fontSize:8,fontWeight:FontWeight.w600)),
+                          ]),
+                    ])),
+                ),
+              ]);
+            }),
         ])));
   }
 }
