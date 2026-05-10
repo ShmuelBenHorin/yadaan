@@ -1572,11 +1572,14 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
   late final AnimationController _enter, _confettiCtrl;
   final List<_Confetti> _confettiPieces = [];
   bool _showButtons = false;
+  bool _showLevelUp = false;
+  late final AnimationController _levelUpCtrl;
 
   @override void initState() {
     super.initState();
     _enter = AnimationController(vsync:this, duration:const Duration(milliseconds:700))..forward();
     _confettiCtrl = AnimationController(vsync:this, duration:const Duration(seconds:3))..forward();
+    _levelUpCtrl = AnimationController(vsync:this, duration:const Duration(milliseconds:800));
     _sc = List.generate(3,(i) => AnimationController(vsync:this, duration:const Duration(milliseconds:600)));
     // Generate confetti
     final rnd = Random();
@@ -1601,10 +1604,17 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
     Future.delayed(Duration(milliseconds: 600 + widget.stars * 300 + 400), () {
       if (mounted) setState(() => _showButtons = true);
     });
+    // Level up animation (only if next level available)
+    Future.delayed(Duration(milliseconds: 600 + widget.stars * 300 + 700), () {
+      if (mounted && _canNext) {
+        setState(() => _showLevelUp = true);
+        _levelUpCtrl.forward();
+      }
+    });
   }
 
   @override void dispose() {
-    _enter.dispose(); _confettiCtrl.dispose();
+    _enter.dispose(); _confettiCtrl.dispose(); _levelUpCtrl.dispose();
     for (final c in _sc) c.dispose();
     super.dispose();
   }
@@ -1657,6 +1667,28 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
                       style: TextStyle(fontSize: 56,
                         color: i < widget.stars ? Pal.starOn : Pal.starOff)))))))),
           const SizedBox(height: 48),
+          // Level Up banner
+          if (_showLevelUp) ...[
+            const SizedBox(height: 8),
+            AnimatedBuilder(
+              animation: _levelUpCtrl,
+              builder: (_, __) {
+                final v = CurvedAnimation(parent: _levelUpCtrl, curve: Curves.easeOutBack).value;
+                return Opacity(
+                  opacity: v.clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: 0.5 + v * 0.5,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFFFF9F0A), Color(0xFFFF6B00)]),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [BoxShadow(color: const Color(0xFFFF9F0A).withOpacity(0.6 * v), blurRadius: 24, spreadRadius: 2)]),
+                      child: const Text('עלית שלב! 🚀',
+                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.5)))));
+              }),
+            const SizedBox(height: 24),
+          ],
           // Buttons appear after animation
           AnimatedOpacity(
             opacity: _showButtons ? 1.0 : 0.0,
