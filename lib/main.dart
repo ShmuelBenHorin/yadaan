@@ -391,8 +391,10 @@ class GameState extends ChangeNotifier {
   int _answeredCorrect=0,_stars=Cfg.starsPerLevel,_wrong=0,_timer=Cfg.timerSecs;
   bool _waitingContinue=false;
   int? _sel; bool _fb=false; Phase _phase=Phase.playing; Timer? _t;
-  GameState({required this.levelIdx,required this.diff}){
-    _queue=List<Question>.from(QRepo.forLevel(levelIdx,diff));
+  final List<Question> _failedQs=[];
+  List<Question> get failedQuestions=>List.from(_failedQs);
+  GameState({required this.levelIdx,required this.diff,List<Question>? retryWith}){
+    _queue=List<Question>.from(retryWith??QRepo.forLevel(levelIdx,diff));
     _originalTotal=_queue.length;
     _startTimer();
   }
@@ -414,6 +416,7 @@ class GameState extends ChangeNotifier {
     _sel=-1; _fb=true;
     await EnergyService.instance.spend(Cfg.energyCostWrong);
     MistakesService.instance.add(cur);
+    if(!_failedQs.contains(cur))_failedQs.add(cur);
     _waitingContinue=true; notifyListeners();
   }
   void answer(int idx) async {
@@ -430,6 +433,7 @@ class GameState extends ChangeNotifier {
       await Sfx.wrong(); _wrong++; _stars=(Cfg.starsPerLevel-_wrong).clamp(0,3);
       await EnergyService.instance.spend(Cfg.energyCostWrong);
       MistakesService.instance.add(cur);
+      if(!_failedQs.contains(cur))_failedQs.add(cur);
       _waitingContinue=true; notifyListeners();
     }
   }
@@ -1416,7 +1420,8 @@ class _DiffTransitionNode extends StatelessWidget {
 // ═══════════════════════════════════════════════
 class GameScreen extends StatefulWidget {
   final Diff diff; final int levelIndex;
-  const GameScreen({super.key,required this.diff,required this.levelIndex});
+  final List<Question>? retryWith;
+  const GameScreen({super.key,required this.diff,required this.levelIndex,this.retryWith});
   @override State<GameScreen> createState()=>_GS();
 }
 class _GS extends State<GameScreen> with TickerProviderStateMixin {
@@ -1426,7 +1431,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
   bool _exiting=false;
   @override void initState(){
     super.initState();
-    _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex);
+    _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex,retryWith:widget.retryWith);
     _gs.addListener(_onChange);
     EnergyService.instance.addListener(_onEnergyChange);
     _shakeCtrl=AnimationController(vsync:this,duration:const Duration(milliseconds:400));
@@ -1455,7 +1460,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     }
     setState((){});
     if(_gs.phase==Phase.complete&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});}
-    if(_gs.phase==Phase.failed&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex)));});}
+    if(_gs.phase==Phase.failed&&!_exiting){final fq=_gs.failedQuestions;_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex,failedQuestions:fq)));});}
   }
   @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();super.dispose();}
   Future<bool> _quit() async {
@@ -1854,7 +1859,8 @@ class _ConfettiPainter extends CustomPainter {
 // ═══════════════════════════════════════════════
 class FailedScreen extends StatefulWidget {
   final Diff diff; final int levelIndex;
-  const FailedScreen({super.key,required this.diff,required this.levelIndex});
+  final List<Question> failedQuestions;
+  const FailedScreen({super.key,required this.diff,required this.levelIndex,required this.failedQuestions});
   @override State<FailedScreen> createState()=>_FS();
 }
 class _FS extends State<FailedScreen> with SingleTickerProviderStateMixin {
@@ -1881,7 +1887,7 @@ class _FS extends State<FailedScreen> with SingleTickerProviderStateMixin {
         const SizedBox(height:48),
         _bigBtn('\u{1F504}  \u05E0\u05E1\u05D4 \u05E9\u05D5\u05D1',widget.diff.color,(){
           if(!EnergyService.instance.has){Navigator.push(context,_slide(const NoEnergyScreen()));return;}
-          Navigator.pushReplacement(context,_slide(GameScreen(diff:widget.diff,levelIndex:widget.levelIndex)));
+          Navigator.pushReplacement(context,_slide(GameScreen(diff:widget.diff,levelIndex:widget.levelIndex,retryWith:widget.failedQuestions)));
         }),
         const SizedBox(height:14),
         _outBtn('\u{1F5FA}\uFE0F  \u05DE\u05E4\u05EA \u05E9\u05DC\u05D1\u05D9\u05DD',()=>Navigator.popUntil(context,(r)=>r.isFirst)),
