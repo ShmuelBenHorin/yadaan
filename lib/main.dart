@@ -1521,6 +1521,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
                       shadows:[Shadow(color:Pal.red.withOpacity(0.8),blurRadius:12)])),
                   ])))))));
           }),
+        Positioned(left:0,right:0,bottom:0,child:_TimerBar(gs:_gs)),
       ])));
   }
 }
@@ -1536,6 +1537,23 @@ class _TimerRing extends StatelessWidget {
         backgroundColor:Pal.card,valueColor:AlwaysStoppedAnimation(c))),
       Text('$s',style:TextStyle(color:c,fontSize:16,fontWeight:FontWeight.w900)),
     ]));
+  }
+}
+
+class _TimerBar extends StatelessWidget {
+  final GameState gs;
+  const _TimerBar({required this.gs});
+  @override Widget build(BuildContext context){
+    final pct=(gs.timer/Cfg.timerSecs).clamp(0.0,1.0);
+    final c=pct>0.5?const Color(0xFF4D96FF):pct>0.25?const Color(0xFFF39C12):Pal.red;
+    return TweenAnimationBuilder<double>(
+      tween:Tween<double>(end:pct),
+      duration:const Duration(milliseconds:980),
+      curve:Curves.linear,
+      builder:(_,v,__)=>LinearProgressIndicator(
+        value:v,minHeight:4,
+        backgroundColor:Colors.transparent,
+        valueColor:AlwaysStoppedAnimation(c)));
   }
 }
 
