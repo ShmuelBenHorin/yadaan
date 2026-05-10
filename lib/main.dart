@@ -396,6 +396,7 @@ class GameState extends ChangeNotifier {
   int get stars=>_stars; int? get sel=>_sel; bool get fb=>_fb;
   Phase get phase=>_phase; int get timer=>_timer; Question get cur=>_queue[0];
   int get total=>_originalTotal;
+  int get qi=>_answeredCorrect;
   double get prog=>_originalTotal==0?1.0:_answeredCorrect/_originalTotal;
   void _startTimer(){
     _t?.cancel(); _timer=Cfg.timerSecs; notifyListeners();
