@@ -1418,9 +1418,9 @@ class GameScreen extends StatefulWidget {
 }
 class _GS extends State<GameScreen> with TickerProviderStateMixin {
   late final GameState _gs;
-  late final AnimationController _shakeCtrl,_cardCtrl,_energyLossCtrl;
+  late final AnimationController _shakeCtrl,_cardCtrl,_energyLossCtrl,_fbBarCtrl;
   late final Animation<double> _shake,_card,_energyLossOpacity,_energyLossOffset;
-  bool _exiting=false;
+  bool _exiting=false,_prevFb=false;
   @override void initState(){
     super.initState();
     _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex);
@@ -1433,6 +1433,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     _card=CurvedAnimation(parent:_cardCtrl,curve:Curves.easeOutBack);
     _energyLossOpacity=TweenSequence([TweenSequenceItem(tween:Tween(begin:0.0,end:1.0),weight:15),TweenSequenceItem(tween:Tween(begin:1.0,end:1.0),weight:50),TweenSequenceItem(tween:Tween(begin:1.0,end:0.0),weight:35)]).animate(CurvedAnimation(parent:_energyLossCtrl,curve:Curves.easeInOut));
     _energyLossOffset=Tween(begin:0.0,end:-80.0).animate(CurvedAnimation(parent:_energyLossCtrl,curve:Curves.easeOut));
+    _fbBarCtrl=AnimationController(vsync:this,duration:const Duration(milliseconds:3200));
     _cardCtrl.forward();
   }
   void _onEnergyChange(){
@@ -1446,6 +1447,12 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
   }
   void _onChange(){
     if(!mounted)return;
+    if(_gs.fb&&!_prevFb){
+      final isOk=_gs.sel!=null&&_gs.sel!=-1&&_gs.sel==_gs.cur.c;
+      _fbBarCtrl.duration=Duration(milliseconds:isOk?3200:3600);
+      _fbBarCtrl.forward(from:0);
+    }
+    _prevFb=_gs.fb;
     if(_gs.fb&&_gs.sel!=null&&_gs.sel!=_gs.cur.c){
       _shakeCtrl.forward(from:0);
       _energyLossCtrl.forward(from:0);
@@ -1454,7 +1461,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     if(_gs.phase==Phase.complete&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});}
     if(_gs.phase==Phase.failed&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex)));});}
   }
-  @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();super.dispose();}
+  @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();_fbBarCtrl.dispose();super.dispose();}
   Future<bool> _quit() async {
     final leave=await showDialog<bool>(context:context,barrierDismissible:false,builder:(_)=>_QuitDlg());
     return leave??false;
@@ -1521,7 +1528,8 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
                       shadows:[Shadow(color:Pal.red.withOpacity(0.8),blurRadius:12)])),
                   ])))))));
           }),
-        Positioned(left:0,right:0,bottom:0,child:_TimerBar(gs:_gs)),
+        if(_gs.fb)Positioned(left:0,right:0,bottom:0,
+          child:_FbBar(ctrl:_fbBarCtrl,correct:_gs.sel!=null&&_gs.sel!=-1&&_gs.sel==_gs.cur.c)),
       ])));
   }
 }
@@ -1540,20 +1548,18 @@ class _TimerRing extends StatelessWidget {
   }
 }
 
-class _TimerBar extends StatelessWidget {
-  final GameState gs;
-  const _TimerBar({required this.gs});
+class _FbBar extends StatelessWidget {
+  final AnimationController ctrl;
+  final bool correct;
+  const _FbBar({required this.ctrl,required this.correct});
   @override Widget build(BuildContext context){
-    final pct=(gs.timer/Cfg.timerSecs).clamp(0.0,1.0);
-    final c=pct>0.5?const Color(0xFF4D96FF):pct>0.25?const Color(0xFFF39C12):Pal.red;
-    return TweenAnimationBuilder<double>(
-      tween:Tween<double>(end:pct),
-      duration:const Duration(milliseconds:980),
-      curve:Curves.linear,
-      builder:(_,v,__)=>LinearProgressIndicator(
-        value:v,minHeight:4,
+    return AnimatedBuilder(
+      animation:ctrl,
+      builder:(_,__)=>LinearProgressIndicator(
+        value:1.0-ctrl.value,
+        minHeight:4,
         backgroundColor:Colors.transparent,
-        valueColor:AlwaysStoppedAnimation(c)));
+        valueColor:AlwaysStoppedAnimation(correct?Pal.green:Pal.red)));
   }
 }
 
