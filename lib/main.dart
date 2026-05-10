@@ -44,7 +44,8 @@ class Cfg {
   static const questionsPerLevel    = 10;
   static const starsPerLevel        = 3;
   static const maxWrongPerLevel     = 2;
-  static const starsToUnlockNext    = 2;
+  static const segmentSize          = 5;
+  static const starsPerSegment      = 10;
   static const starsToUnlockMedium  = 10;
   static const starsToUnlockHard    = 15;
 
@@ -192,9 +193,20 @@ class LevelService extends ChangeNotifier {
   }
   bool isLevelUnlocked(Diff d,int idx) {
     if (!isDiffUnlocked(d)) return false;
-    if (idx==0) return true;
-    int cum=0; for(int i=0;i<idx;i++) cum+=starsFor(d,i);
-    return cum>=idx*Cfg.starsToUnlockNext;
+    final seg = idx ~/ Cfg.segmentSize;
+    if (seg == 0) return true;
+    final prevStart = (seg-1)*Cfg.segmentSize;
+    int prevStars = 0;
+    for(int i=prevStart;i<prevStart+Cfg.segmentSize;i++) prevStars+=starsFor(d,i);
+    return prevStars >= Cfg.starsPerSegment;
+  }
+  String segmentProgress(Diff d, int idx) {
+    final seg = idx ~/ Cfg.segmentSize;
+    if (seg == 0) return "";
+    final prevStart = (seg-1)*Cfg.segmentSize;
+    int prevStars = 0;
+    for(int i=prevStart;i<prevStart+Cfg.segmentSize;i++) prevStars+=starsFor(d,i);
+    return "$prevStars/${Cfg.starsPerSegment} ⭐";
   }
   Future<void> save(Diff d,int idx,int stars) async {
     if (stars>starsFor(d,idx)) {
@@ -1121,6 +1133,7 @@ class LevelMapScreen extends StatelessWidget {
                         stars:ls.starsFor(diff,i),
                         perfect:ls.starsFor(diff,i)==Cfg.starsPerLevel,
                         isNext:i==nextIdx,
+                        lockLabel:ls.isLevelUnlocked(diff,i)?"":ls.segmentProgress(diff,i),
                         onTap:(){
                           if(!ls.isLevelUnlocked(diff,i))return;
                           if(!EnergyService.instance.has){Navigator.push(ctx,_slide(const NoEnergyScreen()));return;}
@@ -1251,16 +1264,19 @@ class _TrailPainter extends CustomPainter {
       }
     }
   }
-  @override bool shouldRepaint(_)=>true;
+  @override bool shouldRepaint(_TrailPainter old)=>
+    old.count!=count||old.diff!=diff||old.positions!=positions;
 }
 
 // ── Trail node widget ───────────────────────────────
 class _TrailNode extends StatefulWidget {
   final Diff diff;final int index,stars;
   final bool unlocked,perfect,isNext;
+  final String lockLabel;
   final VoidCallback onTap;
   const _TrailNode({required this.diff,required this.index,required this.unlocked,
-    required this.stars,required this.perfect,required this.isNext,required this.onTap});
+    required this.stars,required this.perfect,required this.isNext,
+    this.lockLabel="",required this.onTap});
   @override State<_TrailNode> createState()=>_TrailNodeState();
 }
 class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMixin {
@@ -1340,7 +1356,7 @@ class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMi
                               shadows:const [Shadow(color:Colors.black45,blurRadius:6)]))
                         :Column(mainAxisSize:MainAxisSize.min,children:[
                             Icon(Icons.lock_rounded,color:Pal.ts.withOpacity(0.40),size:15),
-                            Text('${widget.index*Cfg.starsToUnlockNext}⭐',
+                            Text(widget.lockLabel,
                               style:TextStyle(color:Pal.ts.withOpacity(0.38),fontSize:8,fontWeight:FontWeight.w600)),
                           ]),
                     ])),
