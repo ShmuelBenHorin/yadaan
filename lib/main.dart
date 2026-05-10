@@ -193,8 +193,10 @@ class LevelService extends ChangeNotifier {
   }
   bool isLevelUnlocked(Diff d,int idx) {
     if (!isDiffUnlocked(d)) return false;
+    if (idx == 0) return true;
+    if (starsFor(d, idx-1) == 0) return false;
     final seg = idx ~/ Cfg.segmentSize;
-    if (seg == 0) return true;
+    if (seg == 0 || idx % Cfg.segmentSize != 0) return true;
     final prevStart = (seg-1)*Cfg.segmentSize;
     int prevStars = 0;
     for(int i=prevStart;i<prevStart+Cfg.segmentSize;i++) prevStars+=starsFor(d,i);
@@ -1134,7 +1136,7 @@ class LevelMapScreen extends StatelessWidget {
                         stars:ls.starsFor(diff,i),
                         perfect:ls.starsFor(diff,i)==Cfg.starsPerLevel,
                         isNext:i==nextIdx,
-                        lockLabel:ls.isLevelUnlocked(diff,i)?"":ls.segmentProgress(diff,i),
+                        lockLabel:(!ls.isLevelUnlocked(diff,i)&&i>0&&i%Cfg.segmentSize==0)?ls.segmentProgress(diff,i):"",
                         onTap:(){
                           if(!ls.isLevelUnlocked(diff,i))return;
                           if(!EnergyService.instance.has){Navigator.push(ctx,_slide(const NoEnergyScreen()));return;}
@@ -1355,15 +1357,26 @@ class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMi
                               color:Colors.white,fontSize:widget.isNext?24:20,
                               fontWeight:FontWeight.w900,
                               shadows:const [Shadow(color:Colors.black45,blurRadius:6)]))
-                        :Column(mainAxisSize:MainAxisSize.min,children:[
-                            Icon(Icons.lock_rounded,color:Pal.ts.withOpacity(0.40),size:15),
-                            Text(widget.lockLabel,
-                              style:TextStyle(color:Pal.ts.withOpacity(0.38),fontSize:8,fontWeight:FontWeight.w600)),
-                          ]),
+                        :Icon(Icons.lock_rounded,color:Pal.ts.withOpacity(0.40),size:18),
                     ])),
                 ),
               ]);
             }),
+          if(widget.lockLabel.isNotEmpty)...[
+            const SizedBox(height:6),
+            Container(
+              padding:const EdgeInsets.symmetric(horizontal:6,vertical:4),
+              decoration:BoxDecoration(
+                color:const Color(0xFFFF9500).withOpacity(0.15),
+                borderRadius:BorderRadius.circular(8),
+                border:Border.all(color:const Color(0xFFFF9500).withOpacity(0.45),width:1)),
+              child:Column(mainAxisSize:MainAxisSize.min,children:[
+                Text(widget.lockLabel,textAlign:TextAlign.center,
+                  style:const TextStyle(color:Color(0xFFFFAA33),fontSize:9,fontWeight:FontWeight.w800)),
+                Text('לפתיחה',textAlign:TextAlign.center,
+                  style:TextStyle(color:const Color(0xFFFF9500).withOpacity(0.70),fontSize:8,fontWeight:FontWeight.w600)),
+              ])),
+          ],
         ])));
   }
 }
