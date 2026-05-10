@@ -389,6 +389,7 @@ class GameState extends ChangeNotifier {
   late final List<Question> _queue;
   late final int _originalTotal;
   int _answeredCorrect=0,_stars=Cfg.starsPerLevel,_wrong=0,_timer=Cfg.timerSecs;
+  bool _waitingContinue=false;
   int? _sel; bool _fb=false; Phase _phase=Phase.playing; Timer? _t;
   GameState({required this.levelIdx,required this.diff}){
     _queue=List<Question>.from(QRepo.forLevel(levelIdx,diff));
@@ -396,6 +397,7 @@ class GameState extends ChangeNotifier {
     _startTimer();
   }
   int get stars=>_stars; int? get sel=>_sel; bool get fb=>_fb;
+  bool get waitingContinue=>_waitingContinue;
   Phase get phase=>_phase; int get timer=>_timer; Question get cur=>_queue[0];
   int get total=>_originalTotal;
   int get qi=>_answeredCorrect;
@@ -412,34 +414,35 @@ class GameState extends ChangeNotifier {
     _sel=-1; _fb=true;
     await EnergyService.instance.spend(Cfg.energyCostWrong);
     MistakesService.instance.add(cur);
-    notifyListeners();
-    if(_wrong>Cfg.maxWrongPerLevel){await Sfx.fail();await EnergyService.instance.spend(Cfg.energyCostFail);await Future.delayed(const Duration(milliseconds:1500));_phase=Phase.failed;notifyListeners();return;}
-    await Future.delayed(const Duration(milliseconds:3600));
-    _fb=false;_sel=null;
-    final q=_queue.removeAt(0);_queue.add(q);
-    _startTimer(); notifyListeners();
+    _waitingContinue=true; notifyListeners();
   }
   void answer(int idx) async {
-    if(_fb)return; _t?.cancel(); _sel=idx; _fb=true; notifyListeners();
+    if(_fb||_waitingContinue)return; _t?.cancel(); _sel=idx; _fb=true; notifyListeners();
     final ok=idx==cur.c;
     if(ok){
       await Sfx.correct(); QRepo.markSeen(cur.id,diff);
-      await Future.delayed(const Duration(milliseconds:3200));
+      await Future.delayed(const Duration(milliseconds:900));
       _fb=false;_sel=null;
       _queue.removeAt(0); _answeredCorrect++;
       if(_queue.isEmpty){await _finish();return;}
-      _startTimer();
+      _startTimer(); notifyListeners();
     } else {
       await Sfx.wrong(); _wrong++; _stars=(Cfg.starsPerLevel-_wrong).clamp(0,3);
       await EnergyService.instance.spend(Cfg.energyCostWrong);
       MistakesService.instance.add(cur);
-      await Future.delayed(const Duration(milliseconds:3600));
-      if(_wrong>Cfg.maxWrongPerLevel){await Sfx.fail();await EnergyService.instance.spend(Cfg.energyCostFail);_phase=Phase.failed;notifyListeners();return;}
-      _fb=false;_sel=null;
-      final q=_queue.removeAt(0);_queue.add(q);
-      _startTimer();
+      _waitingContinue=true; notifyListeners();
     }
-    notifyListeners();
+  }
+  void continueAfterFeedback() async {
+    if(!_waitingContinue)return;
+    _waitingContinue=false; _fb=false; _sel=null;
+    if(_wrong>Cfg.maxWrongPerLevel){
+      await Sfx.fail();
+      await EnergyService.instance.spend(Cfg.energyCostFail);
+      _phase=Phase.failed; notifyListeners(); return;
+    }
+    final q=_queue.removeAt(0); _queue.add(q);
+    _startTimer(); notifyListeners();
   }
   Future<void> _finish() async {
     _t?.cancel();
@@ -1418,9 +1421,9 @@ class GameScreen extends StatefulWidget {
 }
 class _GS extends State<GameScreen> with TickerProviderStateMixin {
   late final GameState _gs;
-  late final AnimationController _shakeCtrl,_cardCtrl,_energyLossCtrl,_fbBarCtrl;
+  late final AnimationController _shakeCtrl,_cardCtrl,_energyLossCtrl;
   late final Animation<double> _shake,_card,_energyLossOpacity,_energyLossOffset;
-  bool _exiting=false,_prevFb=false;
+  bool _exiting=false;
   @override void initState(){
     super.initState();
     _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex);
@@ -1433,7 +1436,6 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     _card=CurvedAnimation(parent:_cardCtrl,curve:Curves.easeOutBack);
     _energyLossOpacity=TweenSequence([TweenSequenceItem(tween:Tween(begin:0.0,end:1.0),weight:15),TweenSequenceItem(tween:Tween(begin:1.0,end:1.0),weight:50),TweenSequenceItem(tween:Tween(begin:1.0,end:0.0),weight:35)]).animate(CurvedAnimation(parent:_energyLossCtrl,curve:Curves.easeInOut));
     _energyLossOffset=Tween(begin:0.0,end:-80.0).animate(CurvedAnimation(parent:_energyLossCtrl,curve:Curves.easeOut));
-    _fbBarCtrl=AnimationController(vsync:this,duration:const Duration(milliseconds:3200));
     _cardCtrl.forward();
   }
   void _onEnergyChange(){
@@ -1447,12 +1449,6 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
   }
   void _onChange(){
     if(!mounted)return;
-    if(_gs.fb&&!_prevFb){
-      final isOk=_gs.sel!=null&&_gs.sel!=-1&&_gs.sel==_gs.cur.c;
-      _fbBarCtrl.duration=Duration(milliseconds:isOk?3200:3600);
-      _fbBarCtrl.forward(from:0);
-    }
-    _prevFb=_gs.fb;
     if(_gs.fb&&_gs.sel!=null&&_gs.sel!=_gs.cur.c){
       _shakeCtrl.forward(from:0);
       _energyLossCtrl.forward(from:0);
@@ -1461,7 +1457,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     if(_gs.phase==Phase.complete&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});}
     if(_gs.phase==Phase.failed&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex)));});}
   }
-  @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();_fbBarCtrl.dispose();super.dispose();}
+  @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();super.dispose();}
   Future<bool> _quit() async {
     final leave=await showDialog<bool>(context:context,barrierDismissible:false,builder:(_)=>_QuitDlg());
     return leave??false;
@@ -1501,9 +1497,22 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
               offset:Offset(_gs.fb&&_gs.sel!=null&&_gs.sel!=q.c?_shake.value:0,0),
               child:_QCard(gs:_gs,diff:widget.diff)))),
             const SizedBox(height:16),
-            if(_gs.fb&&q.f!=null)_FactBanner(gs:_gs),
+            if(_gs.waitingContinue&&q.f!=null)_FactBanner(gs:_gs),
             const SizedBox(height:10),
             ...List.generate(q.a.length,(i)=>Padding(padding:const EdgeInsets.only(bottom:10),child:_ABtn(gs:_gs,i:i))),
+            if(_gs.waitingContinue)Padding(
+              padding:const EdgeInsets.only(top:4),
+              child:GestureDetector(
+                onTap:_gs.continueAfterFeedback,
+                child:Container(
+                  width:double.infinity,
+                  padding:const EdgeInsets.symmetric(vertical:16),
+                  decoration:BoxDecoration(
+                    gradient:LinearGradient(colors:[widget.diff.color,Color.lerp(widget.diff.color,Colors.black,0.3)!]),
+                    borderRadius:BorderRadius.circular(16),
+                    boxShadow:[BoxShadow(color:widget.diff.color.withOpacity(0.4),blurRadius:12,offset:const Offset(0,4))]),
+                  child:Text('המשך',textAlign:TextAlign.center,
+                    style:const TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w800))))),
           ]))),
         ])),
         // ─── אפקט −1 ⚡ באמצע המסך ───
@@ -1528,8 +1537,6 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
                       shadows:[Shadow(color:Pal.red.withOpacity(0.8),blurRadius:12)])),
                   ])))))));
           }),
-        if(_gs.fb)Positioned(left:0,right:0,bottom:0,
-          child:_FbBar(ctrl:_fbBarCtrl,correct:_gs.sel!=null&&_gs.sel!=-1&&_gs.sel==_gs.cur.c)),
       ])));
   }
 }
@@ -1548,20 +1555,6 @@ class _TimerRing extends StatelessWidget {
   }
 }
 
-class _FbBar extends StatelessWidget {
-  final AnimationController ctrl;
-  final bool correct;
-  const _FbBar({required this.ctrl,required this.correct});
-  @override Widget build(BuildContext context){
-    return AnimatedBuilder(
-      animation:ctrl,
-      builder:(_,__)=>LinearProgressIndicator(
-        value:1.0-ctrl.value,
-        minHeight:4,
-        backgroundColor:Colors.transparent,
-        valueColor:AlwaysStoppedAnimation(correct?Pal.green:Pal.red)));
-  }
-}
 
 class _QCard extends StatelessWidget {
   final GameState gs; final Diff diff;
