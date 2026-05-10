@@ -371,13 +371,20 @@ class Sfx {
 // ═══════════════════════════════════════════════
 enum Phase{playing,complete,failed}
 class GameState extends ChangeNotifier {
-  final int levelIdx; final Diff diff; final List<Question> questions;
-  int _qi=0,_stars=Cfg.starsPerLevel,_wrong=0,_timer=Cfg.timerSecs;
+  final int levelIdx; final Diff diff;
+  late final List<Question> _queue;
+  late final int _originalTotal;
+  int _answeredCorrect=0,_stars=Cfg.starsPerLevel,_wrong=0,_timer=Cfg.timerSecs;
   int? _sel; bool _fb=false; Phase _phase=Phase.playing; Timer? _t;
-  GameState({required this.levelIdx,required this.diff}):questions=QRepo.forLevel(levelIdx,diff){_startTimer();}
-  int get qi=>_qi; int get stars=>_stars; int? get sel=>_sel; bool get fb=>_fb;
-  Phase get phase=>_phase; int get timer=>_timer; Question get cur=>questions[_qi];
-  int get total=>questions.length; double get prog=>(_qi+1)/total;
+  GameState({required this.levelIdx,required this.diff}){
+    _queue=List<Question>.from(QRepo.forLevel(levelIdx,diff));
+    _originalTotal=_queue.length;
+    _startTimer();
+  }
+  int get stars=>_stars; int? get sel=>_sel; bool get fb=>_fb;
+  Phase get phase=>_phase; int get timer=>_timer; Question get cur=>_queue[0];
+  int get total=>_originalTotal;
+  double get prog=>_originalTotal==0?1.0:_answeredCorrect/_originalTotal;
   void _startTimer(){
     _t?.cancel(); _timer=Cfg.timerSecs; notifyListeners();
     _t=Timer.periodic(const Duration(seconds:1),(t){
@@ -394,22 +401,29 @@ class GameState extends ChangeNotifier {
     if(_wrong>Cfg.maxWrongPerLevel){await Sfx.fail();await EnergyService.instance.spend(Cfg.energyCostFail);await Future.delayed(const Duration(milliseconds:1500));_phase=Phase.failed;notifyListeners();return;}
     await Future.delayed(const Duration(milliseconds:3600));
     _fb=false;_sel=null;
-    if(_qi<total-1){_qi++;_startTimer();}else{await _finish();}
-    notifyListeners();
+    final q=_queue.removeAt(0);_queue.add(q);
+    _startTimer(); notifyListeners();
   }
   void answer(int idx) async {
     if(_fb)return; _t?.cancel(); _sel=idx; _fb=true; notifyListeners();
     final ok=idx==cur.c;
-    if(ok){await Sfx.correct();QRepo.markSeen(cur.id,diff);await Future.delayed(const Duration(milliseconds:3200));}
-    else{
+    if(ok){
+      await Sfx.correct(); QRepo.markSeen(cur.id,diff);
+      await Future.delayed(const Duration(milliseconds:3200));
+      _fb=false;_sel=null;
+      _queue.removeAt(0); _answeredCorrect++;
+      if(_queue.isEmpty){await _finish();return;}
+      _startTimer();
+    } else {
       await Sfx.wrong(); _wrong++; _stars=(Cfg.starsPerLevel-_wrong).clamp(0,3);
       await EnergyService.instance.spend(Cfg.energyCostWrong);
       MistakesService.instance.add(cur);
       await Future.delayed(const Duration(milliseconds:3600));
       if(_wrong>Cfg.maxWrongPerLevel){await Sfx.fail();await EnergyService.instance.spend(Cfg.energyCostFail);_phase=Phase.failed;notifyListeners();return;}
+      _fb=false;_sel=null;
+      final q=_queue.removeAt(0);_queue.add(q);
+      _startTimer();
     }
-    _fb=false;_sel=null;
-    if(_qi>=total-1){await _finish();}else{_qi++;_startTimer();}
     notifyListeners();
   }
   Future<void> _finish() async {
