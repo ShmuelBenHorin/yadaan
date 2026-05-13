@@ -17,7 +17,7 @@ import 'sfx_stub.dart' if (dart.library.html) 'sfx_web.dart';
 //  CONFIG
 // ═══════════════════════════════════════════════
 class Cfg {
-  static const rcAndroid            = 'YOUR_REVENUECAT_ANDROID_KEY';
+  static const rcAndroid            = 'goog_uYtvWookyMtAzQQXtOyGOETNCXz';
   static const rciOS                = 'appl_DSEyAVZKuOktZXgzNqiPKhjnOlO';
   static const entitlement          = 'premium';
   static const devCode              = 'shmuel1231';

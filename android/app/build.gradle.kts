@@ -30,7 +30,7 @@ android {
         applicationId = "trivia.master"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 11
+        versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
