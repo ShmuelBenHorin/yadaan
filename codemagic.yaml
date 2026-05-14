@@ -36,8 +36,12 @@ workflows:
             --workspace ios/Runner.xcworkspace \
             --scheme Runner
 
+      - name: Rename IPA to ASCII filename
+        script: |
+          mv build/ios/ipa/*.ipa build/ios/ipa/yadaan.ipa
+
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/yadaan.ipa
 
     publishing:
       app_store_connect:
