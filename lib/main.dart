@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 import 'questions_easy.dart';
 import 'questions_medium.dart';
@@ -58,6 +60,40 @@ class Cfg {
   static const energyRechargeAmtPro = 3;
 
   static const timerSecs            = 15;
+}
+
+// ═══════════════════════════════════════════════
+//  ANALYTICS
+// ═══════════════════════════════════════════════
+class Analytics {
+  static FirebaseAnalytics? _fa;
+  static int _sessionStages = 0;
+
+  static Future<void> init() async {
+    _fa = FirebaseAnalytics.instance;
+  }
+
+  static void levelStarted() { _sessionStages++; }
+
+  static Future<void> energyDepleted() async {
+    try { await _fa?.logEvent(name:'energy_depleted',
+      parameters:{'stages_played':_sessionStages}); } catch(_){}
+  }
+
+  static Future<void> adWatchedForEnergy({required int amount}) async {
+    try { await _fa?.logEvent(name:'ad_watched_for_energy',
+      parameters:{'energy_gained':amount}); } catch(_){}
+  }
+
+  static Future<void> energyDepletedUserLeft() async {
+    try { await _fa?.logEvent(name:'energy_depleted_user_left',
+      parameters:{'stages_played':_sessionStages}); } catch(_){}
+  }
+
+  static Future<void> sessionEnded() async {
+    try { await _fa?.logEvent(name:'session_ended',
+      parameters:{'stages_played':_sessionStages,'energy_remaining':EnergyService.instance.energy}); } catch(_){}
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -250,7 +286,13 @@ class EnergyService extends ChangeNotifier {
       _save(); notifyListeners();
     }
   }
-  Future<void> spend(int n) async { _e=(_e-n).clamp(0,maxE); await _save(); notifyListeners(); }
+  Future<void> spend(int n) async {
+    final wasPositive = _e > 0;
+    _e=(_e-n).clamp(0,maxE);
+    await _save();
+    if (wasPositive && _e == 0) Analytics.energyDepleted();
+    notifyListeners();
+  }
   Future<void> _save() async {
     final p=await SharedPreferences.getInstance();
     await p.setInt('energy',_e); await p.setInt('energy_ts',_last.millisecondsSinceEpoch);
@@ -394,6 +436,7 @@ class GameState extends ChangeNotifier {
   final List<Question> _failedQs=[];
   List<Question> get failedQuestions=>List.from(_failedQs);
   GameState({required this.levelIdx,required this.diff,List<Question>? retryWith}){
+    if(retryWith==null) Analytics.levelStarted();
     _queue=List<Question>.from(retryWith??QRepo.forLevel(levelIdx,diff));
     _originalTotal=_queue.length;
     _startTimer();
@@ -481,6 +524,7 @@ Future<void> _launchUrl(String url) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp,DeviceOrientation.portraitDown]);
+  try { await Firebase.initializeApp(); await Analytics.init(); } catch(e) { debugPrint('Firebase init failed: $e'); }
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
@@ -488,8 +532,19 @@ void main() async {
   }
   runApp(const App());
 }
-class App extends StatelessWidget {
+class App extends StatefulWidget {
   const App({super.key});
+  @override State<App> createState()=>_AppState();
+}
+class _AppState extends State<App> with WidgetsBindingObserver {
+  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);}
+  @override void dispose(){WidgetsBinding.instance.removeObserver(this);super.dispose();}
+  @override void didChangeAppLifecycleState(AppLifecycleState s){
+    if(s==AppLifecycleState.paused||s==AppLifecycleState.detached){
+      Analytics.sessionEnded();
+      if(EnergyService.instance.energy==0) Analytics.energyDepletedUserLeft();
+    }
+  }
   @override Widget build(BuildContext context) {
     return ListenableBuilder(listenable:PurchaseService.instance,
       builder:(_,__)=>MaterialApp(title:'\u05D9\u05D3\u05E2\u05DF',debugShowCheckedModeBanner:false,
@@ -679,6 +734,7 @@ class _AdRewardDialogState extends State<_AdRewardDialog>
   // ── השלמה ─────────────────────────────────────────────────────────────────
   Future<void> _onComplete(int energy) async {
     await EnergyService.instance.rewardFromAd(amount: energy);
+    Analytics.adWatchedForEnergy(amount: energy);
     if (!mounted) return;
     setState(() { _done = true; _earnedEnergy = energy; });
     _anim.forward();
