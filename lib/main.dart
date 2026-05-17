@@ -757,7 +757,7 @@ class _EnergyChipState extends State<EnergyChip> with SingleTickerProviderStateM
           onTap: () {
             if (e.canWatchAd) {
               _showAdDialog(context);
-            } else if (!PurchaseService.instance.isPremium) {
+            } else if (!e.has && !PurchaseService.instance.isPremium) {
               Navigator.push(context, _slide(const NoEnergyScreen()));
             }
           },
