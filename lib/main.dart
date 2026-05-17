@@ -1037,8 +1037,6 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
                     Text(emoji,style:const TextStyle(fontSize:24)),
                     const SizedBox(width:12),
                     Expanded(child:Text(name,style:const TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w700))),
-                    Text('$count שאלות',style:TextStyle(color:color,fontSize:11,fontWeight:FontWeight.w600)),
-                    const SizedBox(width:6),
                     Icon(Icons.chevron_right,color:color,size:18),
                   ]))));
           }).toList(),
@@ -1115,8 +1113,6 @@ void _showCatDiffPicker(BuildContext ctx,String key,String name,String emoji,Col
                     decoration:BoxDecoration(color:Pal.premium.withOpacity(0.2),borderRadius:BorderRadius.circular(8)),
                     child:const Text('\u05E4\u05E8\u05D5',style:TextStyle(color:Pal.premium,fontSize:10,fontWeight:FontWeight.w800)))],
                   const Spacer(),
-                  Text('$count שאלות',style:TextStyle(color:d.color.withOpacity(0.8),fontSize:12)),
-                  const SizedBox(width:8),
                   Icon(locked?Icons.lock:Icons.arrow_forward_ios,color:d.color,size:14),
                 ]))));
         }).toList(),
@@ -1231,7 +1227,7 @@ class _DiffCard extends StatelessWidget {
                   child:const Text('\u05E4\u05E8\u05D5',style:TextStyle(color:Pal.premium,fontSize:10,fontWeight:FontWeight.w800)))],
               ]),
               const SizedBox(height:4),
-              Text(unlocked?'${QRepo.levelCount(diff)} \u05E9\u05DC\u05D1\u05D9\u05DD \u00B7 $earned/$maxS \u2B50'
+              Text(unlocked?'$earned/$maxS \u2B50'
                 :(isPrem?'\u05E6\u05E8\u05D9\u05DA \u05E4\u05E8\u05D5 + $need \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD':'\u05E6\u05E8\u05D9\u05DA $need \u2B50 \u05DC\u05E4\u05EA\u05D9\u05D7\u05D4'),
                 textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.ts,fontSize:12)),
               if(unlocked&&earned>0)...[const SizedBox(height:8),ClipRRect(borderRadius:BorderRadius.circular(4),
@@ -2462,9 +2458,6 @@ class CategorySelectScreen extends StatelessWidget {
                       children: [
                         Text(name, style: const TextStyle(
                           color: Pal.tp, fontSize:14, fontWeight:FontWeight.w800)),
-                        const SizedBox(height:2),
-                        Text('$count שאלות', style: TextStyle(
-                          color: color, fontSize:10, fontWeight:FontWeight.w600)),
                       ])),
                     const SizedBox(width:8),
                   ])));
