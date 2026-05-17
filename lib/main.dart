@@ -1055,7 +1055,7 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
                   child:const Column(children:[
                     Text('👑  רכוש פרו',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900)),
                     SizedBox(height:4),
-                    Text('מוחות · טעינה מהירה · ללא פרסומות',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
+                    Text('יותר מוחות · טעינה מהירה · ללא פרסומות',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
                   ])))),
           const SizedBox(height:24),
         ]))),
@@ -2275,7 +2275,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
                 child:const Column(children:[
                   Text('👑  רכוש פרו',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900)),
                   SizedBox(height:4),
-                  Text('מוחות · טעינה מהירה · ללא פרסומות',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
+                  Text('יותר מוחות · טעינה מהירה · ללא פרסומות',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
                 ]))),
           const SizedBox(height:20),
           _outBtn('חזרה',()=>Navigator.pop(context)),
