@@ -104,7 +104,7 @@ extension DiffX on Diff {
   String get label   => ['\u05E7\u05DC', '\u05D1\u05D9\u05E0\u05D5\u05E0\u05D9', '\u05E7\u05E9\u05D4'][index];
   Color  get color   => [const Color(0xFF2ECC71), const Color(0xFF4D96FF), const Color(0xFFE74C3C)][index];
   bool   get isPrem  => this == Diff.hard;
-  String get emoji   => ['\u{1F7E2}', '\u{1F535}', '\u{1F534}'][index];
+  String get emoji   => ['\u{1F921}', '\u{1F535}', '\u{1F534}'][index];
 }
 
 // ═══════════════════════════════════════════════
@@ -236,7 +236,7 @@ class LevelService extends ChangeNotifier {
     final prevStart = (seg-1)*Cfg.segmentSize;
     int prevStars = 0;
     for(int i=prevStart;i<prevStart+Cfg.segmentSize;i++) prevStars+=starsFor(d,i);
-    return prevStars >= Cfg.starsPerSegment;
+    return prevStars >= seg * Cfg.starsPerSegment;
   }
   String segmentProgress(Diff d, int idx) {
     final seg = idx ~/ Cfg.segmentSize;
@@ -244,7 +244,7 @@ class LevelService extends ChangeNotifier {
     final prevStart = (seg-1)*Cfg.segmentSize;
     int prevStars = 0;
     for(int i=prevStart;i<prevStart+Cfg.segmentSize;i++) prevStars+=starsFor(d,i);
-    return "$prevStars/${Cfg.starsPerSegment} ⭐";
+    return "$prevStars/${seg * Cfg.starsPerSegment} ⭐";
   }
   Future<void> save(Diff d,int idx,int stars) async {
     if (stars>starsFor(d,idx)) {
@@ -628,7 +628,7 @@ class _EnergyChipState extends State<EnergyChip> with SingleTickerProviderStateM
               color: Pal.card, borderRadius: BorderRadius.circular(20),
               border: Border.all(color: c.withOpacity(0.6), width: 1.5)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text('\u26A1', style: TextStyle(fontSize: 14, color: c)),
+              Text('\u{1F9E0}', style: TextStyle(fontSize: 14, color: c)),
               const SizedBox(width: 4),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
@@ -765,9 +765,9 @@ class _AdRewardDialogState extends State<_AdRewardDialog>
 
   // ── מסך ראשי עם שני כפתורים ──────────────────────────────────────────────
   Widget _mainView() => Column(mainAxisSize: MainAxisSize.min, children: [
-    const Text('⚡', style: TextStyle(fontSize: 48)),
+    const Text('🧠', style: TextStyle(fontSize: 48)),
     const SizedBox(height: 10),
-    const Text('קבל אנרגיה',
+    const Text('קבל מוחות',
       style: TextStyle(color: Pal.tp, fontSize: 22, fontWeight: FontWeight.w800)),
     const SizedBox(height: 4),
     const Text('בחר איזה פרסומת לצפות',
@@ -779,7 +779,7 @@ class _AdRewardDialogState extends State<_AdRewardDialog>
       available: _rewardedAd != null,
       emoji:     '🎬',
       title:     'סרטון מלא',
-      reward:    '+5 ⚡',
+      reward:    '+5 🧠',
       subtitle:  'לא ניתן לדלג · ~30 שניות',
       color:     Pal.gold,
       onTap:     _showRewardedAd,
@@ -791,7 +791,7 @@ class _AdRewardDialogState extends State<_AdRewardDialog>
       available: _rewardedInterstitialAd != null,
       emoji:     '⏩',
       title:     'פרסומת קצרה',
-      reward:    '+1 ⚡',
+      reward:    '+1 🧠',
       subtitle:  'ניתן לדלג אחרי כמה שניות',
       color:     const Color(0xFF4D96FF),
       onTap:     _showRewardedInterstitialAd,
@@ -807,7 +807,7 @@ class _AdRewardDialogState extends State<_AdRewardDialog>
   Widget _doneView() => Column(mainAxisSize: MainAxisSize.min, children: [
     ScaleTransition(
       scale: CurvedAnimation(parent: _anim, curve: Curves.easeOutBack),
-      child: const Text('⚡', style: TextStyle(fontSize: 72))),
+      child: const Text('🧠', style: TextStyle(fontSize: 72))),
     const SizedBox(height: 14),
     FadeTransition(
       opacity: _anim,
@@ -1592,7 +1592,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
                     border:Border.all(color:Pal.red.withOpacity(0.6),width:2),
                     boxShadow:[BoxShadow(color:Pal.red.withOpacity(0.35),blurRadius:24,spreadRadius:4)]),
                   child:Row(mainAxisSize:MainAxisSize.min,children:[
-                    const Text('⚡',style:TextStyle(fontSize:28)),
+                    const Text('🧠',style:TextStyle(fontSize:28)),
                     const SizedBox(width:6),
                     Text('−1',style:TextStyle(fontSize:32,fontWeight:FontWeight.w900,color:Pal.red,
                       shadows:[Shadow(color:Pal.red.withOpacity(0.8),blurRadius:12)])),
@@ -2071,9 +2071,9 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
           child:Row(children:[_iconBtn(Icons.arrow_back,()=>Navigator.pop(context))])),
         Expanded(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(28),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
           ScaleTransition(scale:CurvedAnimation(parent:_c,curve:Curves.easeOutBack),
-            child:const Text('\u26A1',style:TextStyle(fontSize:80))),
+            child:const Text('\u{1F9E0}',style:TextStyle(fontSize:80))),
           const SizedBox(height:16),
-          FadeTransition(opacity:_c,child:const Text('\u05E0\u05D2\u05DE\u05E8\u05D4 \u05D4\u05D0\u05E0\u05E8\u05D2\u05D9\u05D4!',
+          FadeTransition(opacity:_c,child:const Text('\u05E0\u05D2\u05DE\u05E8\u05D5 \u05D4\u05DE\u05D5\u05D7\u05D5\u05EA!',
             style:TextStyle(color:Pal.tp,fontSize:26,fontWeight:FontWeight.w900))),
           const SizedBox(height:20),
           Container(
@@ -2084,7 +2084,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
             child:Column(children:[
               Row(mainAxisAlignment:MainAxisAlignment.center,children:[
                 const Text('\u26A1',style:TextStyle(fontSize:20)),const SizedBox(width:8),
-                Text('אנרגיה: ${e.energy} מתוך ${e.maxE}',
+                Text('מוחות: ${e.energy} מתוך ${e.maxE}',
                   textDirection:TextDirection.rtl,
                   style:const TextStyle(color:Pal.tp,fontSize:17,fontWeight:FontWeight.w700)),
               ]),
@@ -2092,7 +2092,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
               const Divider(color:Color(0x222A3A6E)),
               const SizedBox(height:14),
               Text(
-                isPro ? 'טעינה של 3 אנרגיה בכל רבע שעה' : 'אחת בכל רבע שעה מתווספת אנרגיה אחת',
+                isPro ? 'טעינה של 3 מוחות בכל רבע שעה' : 'מוח אחד מתווסף בכל רבע שעה',
                 textAlign:TextAlign.center,
                 style:const TextStyle(color:Pal.ts,fontSize:14,height:1.5)),
               if(e.label.isNotEmpty)...[
@@ -2101,7 +2101,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
                   padding:const EdgeInsets.symmetric(horizontal:16,vertical:10),
                   decoration:BoxDecoration(color:Pal.gold.withOpacity(0.1),borderRadius:BorderRadius.circular(12),
                     border:Border.all(color:Pal.gold.withOpacity(0.3))),
-                  child:Text('הטעינה הבאה: ${e.label}',
+                  child:Text('המוח הבא בעוד: ${e.label}',
                     style:const TextStyle(color:Pal.gold,fontSize:15,fontWeight:FontWeight.w700))),
               ],
             ])),
@@ -2119,7 +2119,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
                   style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w900)),
                 const SizedBox(height:10),
                 Text(
-                  'אנרגיה מקסימלית: 50 במקום 15\nטעינה של 3 אנרגיה בכל רבע שעה',
+                  '50 מוחות במקום 15\nטעינה של 3 מוחות בכל רבע שעה',
                   textAlign:TextAlign.center,
                   style:const TextStyle(color:Pal.ts,fontSize:13,height:1.6)),
                 const SizedBox(height:16),
@@ -2177,8 +2177,8 @@ class _PS extends State<PaywallSheet>{
           const Text('12.90 ₪ לחודש',style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w700)),
           const SizedBox(height:24),
           _bf('🔴','שלבים קשים פתוחים'),
-          _bf('⚡','50 אנרגיה — פי 3 יותר מרגיל'),
-          _bf('🔄','טעינה של 3 אנרגיה כל רבע שעה'),
+          _bf('🧠','50 מוחות — פי 3 יותר מרגיל'),
+          _bf('🔄','טעינה של 3 מוחות כל רבע שעה'),
           _bf('🚫','ללא פרסומות'),
           _bf('🔓','גישה לכל התכנים העתידיים'),
           const SizedBox(height:24),
