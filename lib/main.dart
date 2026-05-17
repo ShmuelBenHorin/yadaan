@@ -501,6 +501,7 @@ class GameState extends ChangeNotifier {
     if(_stars==Cfg.starsPerLevel)await Sfx.perfect();
     await LevelService.instance.save(diff,levelIdx,_stars);
     _phase=Phase.complete;
+    notifyListeners();
   }
   void dispose(){_t?.cancel();}
 }
@@ -2364,11 +2365,13 @@ class _PS extends State<PaywallSheet>{
               },
               child:const Text('שחזר רכישות',style:TextStyle(color:Pal.ts,fontSize:13,decoration:TextDecoration.underline))),
             const SizedBox(height:16),
-            const Text(
-              'המנוי מתחדש אוטומטית ב־12.90 ₪ לחודש אלא אם כן בוטל לפחות 24 שעות לפני סוף התקופה. ניתן לנהל ולבטל את המנוי בהגדרות ה־Apple ID שלך.',
+            Text(
+              defaultTargetPlatform==TargetPlatform.iOS
+                ? 'המנוי מתחדש אוטומטית ב־12.90 ₪ לחודש אלא אם כן בוטל לפחות 24 שעות לפני סוף התקופה. ניתן לנהל ולבטל את המנוי בהגדרות ה־Apple ID שלך.'
+                : 'המנוי מתחדש אוטומטית ב־12.90 ₪ לחודש אלא אם כן בוטל לפחות 24 שעות לפני סוף התקופה. ניתן לנהל ולבטל את המנוי בהגדרות Google Play שלך.',
               textAlign:TextAlign.center,
               textDirection:TextDirection.rtl,
-              style:TextStyle(color:Pal.ts,fontSize:11)),
+              style:const TextStyle(color:Pal.ts,fontSize:11)),
             const SizedBox(height:8),
             Row(mainAxisAlignment:MainAxisAlignment.center,children:[
               GestureDetector(
