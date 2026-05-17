@@ -40,7 +40,7 @@ class Cfg {
           ? 'ca-app-pub-1305167445502870/4131809558'  // iOS Rewarded Interstitial
           : 'ca-app-pub-1305167445502870/1697217900'; // Android Rewarded Interstitial
 
-  static const adRewardedEnergy             = 5; // אנרגיה מפרסומת מלאה
+  static const adRewardedEnergy             = 2; // מוחות מפרסומת
   static const adRewardedInterstitialEnergy = 1; // אנרגיה מפרסומת עם דילוג
 
   static const questionsPerLevel    = 10;
@@ -307,6 +307,11 @@ class EnergyService extends ChangeNotifier {
     final mins = diff.inMinutes + 1;
     return mins.toString() + ' דקות';
   }
+  int get secondsUntilNext {
+    if (_e >= maxE) return 0;
+    final diff = _last.add(Duration(minutes: Cfg.energyRechargeMins)).difference(DateTime.now());
+    return diff.inSeconds.clamp(0, Cfg.energyRechargeMins * 60);
+  }
   bool get canWatchAd => _e < maxE && !PurchaseService.instance.isPremium;
   // אנרגיה מפרסומת — amount לפי סוג הפרסומת
   Future<void> rewardFromAd({int amount = Cfg.adRewardedEnergy}) async {
@@ -529,11 +534,15 @@ void main() async {
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
     await MobileAds.instance.initialize();
+    AdPreloader.preload(); // טוען מודעה ברקע מיד עם עלייה
   }
-  runApp(const App());
+  final _prefs = await SharedPreferences.getInstance();
+  final showOnboarding = !(_prefs.getBool('onboarding_done') ?? false);
+  runApp(App(showOnboarding: showOnboarding));
 }
 class App extends StatefulWidget {
-  const App({super.key});
+  final bool showOnboarding;
+  const App({super.key, required this.showOnboarding});
   @override State<App> createState()=>_AppState();
 }
 class _AppState extends State<App> with WidgetsBindingObserver {
@@ -549,7 +558,131 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return ListenableBuilder(listenable:PurchaseService.instance,
       builder:(_,__)=>MaterialApp(title:'\u05D9\u05D3\u05E2\u05DF',debugShowCheckedModeBanner:false,
         theme:ThemeData.dark().copyWith(scaffoldBackgroundColor:Pal.bg,useMaterial3:true),
-        home:const HomeScreen()));
+        home:widget.showOnboarding ? const OnboardingScreen() : const HomeScreen()));
+  }
+}
+
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+//  ONBOARDING
+// \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+class _OPage {
+  final String emoji, title, body;
+  const _OPage({required this.emoji, required this.title, required this.body});
+  Widget build() => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 36),
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Text(emoji, style: const TextStyle(fontSize: 84)),
+      const SizedBox(height: 32),
+      Text(title, textAlign: TextAlign.center,
+        style: const TextStyle(color: Pal.tp, fontSize: 26, fontWeight: FontWeight.w900, height: 1.3)),
+      const SizedBox(height: 16),
+      Text(body, textAlign: TextAlign.center,
+        style: const TextStyle(color: Pal.ts, fontSize: 16, height: 1.75)),
+    ]),
+  );
+}
+
+class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({super.key});
+  @override State<OnboardingScreen> createState() => _OnboardingState();
+}
+class _OnboardingState extends State<OnboardingScreen> {
+  final _ctrl = PageController();
+  int _page = 0;
+
+  static const _pages = [
+    _OPage(
+      emoji: '\uD83D\uDC4B',
+      title: '\u05D1\u05E8\u05D5\u05DA \u05D4\u05D1\u05D0 \u05DC\u05D9\u05D3\u05E2\u05DF!',
+      body: '\u05D7\u05D9\u05D3\u05D5\u05DF \u05D9\u05D3\u05E2 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA\n\u05E2\u05E0\u05D4 \u05E2\u05DC \u05E9\u05D0\u05DC\u05D5\u05EA, \u05E2\u05DC\u05D4 \u05D1\u05E9\u05DC\u05D1\u05D9\u05DD\n\u05D5\u05D4\u05D5\u05DB\u05D7 \u05E9\u05D0\u05EA\u05D4 \u05D9\u05D3\u05E2\u05DF \u05D0\u05DE\u05D9\u05EA\u05D9',
+    ),
+    _OPage(
+      emoji: '\uD83E\uDDE0',
+      title: '\u05E9\u05DE\u05D5\u05E8 \u05E2\u05DC \u05D4\u05DE\u05D5\u05D7\u05D5\u05EA \u05E9\u05DC\u05DA',
+      body: '\u05E2\u05DC \u05DB\u05DC \u05D8\u05E2\u05D5\u05EA \u05D9\u05D5\u05E8\u05D3 \u05DE\u05D5\u05D7 \u05D0\u05D7\u05D3\n\u05DE\u05D5\u05D7 \u05D0\u05D7\u05D3 \u05DE\u05EA\u05D7\u05D3\u05E9 \u05DB\u05DC 15 \u05D3\u05E7\u05D5\u05EA\n\u05E6\u05E4\u05D4 \u05D1\u05E4\u05E8\u05E1\u05D5\u05DE\u05EA \u05DC\u05D7\u05D9\u05D3\u05D5\u05E9 \u05DE\u05D9\u05D9\u05D3\u05D9',
+    ),
+    _OPage(
+      emoji: '\u2B50',
+      title: '\u05E6\u05D1\u05D5\u05E8 \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD \u05D5\u05E2\u05DC\u05D4',
+      body: '\u05E2\u05DC \u05DB\u05DC \u05E9\u05DC\u05D1 \u05DE\u05D5\u05E6\u05DC\u05D7 \u2014 \u05E2\u05D3 3 \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD\n\u05E6\u05D1\u05D5\u05E8 \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD \u05DB\u05D3\u05D9 \u05DC\u05E4\u05EA\u05D5\u05D7 \u05E9\u05DC\u05D1\u05D9\u05DD \u05D7\u05D3\u05E9\u05D9\u05DD\n\u05D4\u05D2\u05E2 \u05DC\u05E8\u05DE\u05D5\u05EA \u05D1\u05D9\u05E0\u05D5\u05E0\u05D9 \u05D5\u05E7\u05E9\u05D4',
+    ),
+  ];
+
+  void _next() {
+    if (_page < _pages.length - 1) {
+      _ctrl.nextPage(duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
+    } else {
+      _done();
+    }
+  }
+
+  Future<void> _done() async {
+    final p = await SharedPreferences.getInstance();
+    await p.setBool('onboarding_done', true);
+    if (mounted) Navigator.pushReplacement(context, _slide(const HomeScreen()));
+  }
+
+  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Pal.bg,
+      body: Stack(children: [
+        const StarField(),
+        SafeArea(child: Column(children: [
+          Align(
+            alignment: Alignment.topLeft,
+            child: TextButton(
+              onPressed: _done,
+              child: const Text('\u05D3\u05DC\u05D2', style: TextStyle(color: Pal.ts, fontSize: 15)),
+            ),
+          ),
+          Expanded(
+            child: PageView.builder(
+              controller: _ctrl,
+              onPageChanged: (i) => setState(() => _page = i),
+              itemCount: _pages.length,
+              itemBuilder: (_, i) => _pages[i].build(),
+            ),
+          ),
+          Row(mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(_pages.length, (i) =>
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: _page == i ? 24 : 8, height: 8,
+                decoration: BoxDecoration(
+                  color: _page == i ? Pal.gold : Pal.ts.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(4)),
+              )
+            ),
+          ),
+          const SizedBox(height: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: GestureDetector(
+              onTap: _next,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFF4D96FF), Color(0xFF2E5FCC)]),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [BoxShadow(color: const Color(0xFF4D96FF).withOpacity(0.4), blurRadius: 16, offset: const Offset(0,4))],
+                ),
+                child: Text(
+                  _page == _pages.length - 1 ? '\u05D1\u05D5\u05D0\u05D5 \u05E0\u05E9\u05D7\u05E7! \uD83D\uDE80' : '\u05D4\u05D1\u05D0  \u203A',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 36),
+        ])),
+      ]),
+    );
   }
 }
 
@@ -640,10 +773,6 @@ class _EnergyChipState extends State<EnergyChip> with SingleTickerProviderStateM
                   key: ValueKey(e.energy),
                   style: TextStyle(color: c, fontWeight: FontWeight.w900, fontSize: 14))),
               Text('/${e.maxE}', style: const TextStyle(color: Pal.ts, fontSize: 11)),
-              if (e.label.isNotEmpty && e.energy < e.maxE) ...[
-                const SizedBox(width: 6),
-                Text(e.label, style: const TextStyle(color: Pal.gold, fontSize: 10, fontWeight: FontWeight.w700)),
-              ],
               if (e.canWatchAd) ...[
                 const SizedBox(width: 4),
                 const Text('+', style: TextStyle(color: Pal.gold, fontSize: 13, fontWeight: FontWeight.w900)),
@@ -658,85 +787,74 @@ class _EnergyChipState extends State<EnergyChip> with SingleTickerProviderStateM
 }
 
 // ═══════════════════════════════════════════════
-//  AD REWARD DIALOG — שני סוגי Rewarded
-//  • Rewarded (30 שניות, לא ניתן לדילוג) → +5 אנרגיה
-//  • Rewarded Interstitial (דילוג אחרי כמה שניות) → +1 אנרגיה
+//  AD PRELOADER — טוען מודעה מראש ברקע
+// ═══════════════════════════════════════════════
+class AdPreloader {
+  static RewardedAd? _ad;
+  static bool _loading = false;
+  static bool get isReady => _ad != null;
+  static void preload() {
+    if (_loading || _ad != null || !Cfg.adMobEnabled || kIsWeb) return;
+    _loading = true;
+    RewardedAd.load(
+      adUnitId: Cfg.adRewardedUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded:       (ad) { _ad = ad; _loading = false; },
+        onAdFailedToLoad: (_)  { _loading = false; },
+      ),
+    );
+  }
+  static RewardedAd? consume() { final ad=_ad; _ad=null; preload(); return ad; }
+}
+
+// ═══════════════════════════════════════════════
+//  AD REWARD DIALOG — Rewarded (30 שניות) → +2 מוחות
 // ═══════════════════════════════════════════════
 class _AdRewardDialog extends StatefulWidget {
   @override State<_AdRewardDialog> createState() => _AdRewardDialogState();
 }
-
 class _AdRewardDialogState extends State<_AdRewardDialog>
     with SingleTickerProviderStateMixin {
-  bool _loadingRewarded             = true;
-  bool _loadingRewardedInterstitial = true;
-  bool _done                        = false;
-  int  _earnedEnergy                = 0;
-
+  bool _loading = false;
+  bool _done    = false;
   late final AnimationController _anim;
-  RewardedAd?             _rewardedAd;
-  RewardedInterstitialAd? _rewardedInterstitialAd;
+  RewardedAd? _rewardedAd;
 
   @override
   void initState() {
     super.initState();
     _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _loadRewardedAd();
-    _loadRewardedInterstitialAd();
+    _rewardedAd = AdPreloader.consume(); // מיידי אם נטען מראש
+    if (_rewardedAd == null) {
+      // fallback — טעינה מחדש אם ה-preloader לא היה מוכן
+      _loading = true;
+      RewardedAd.load(
+        adUnitId: Cfg.adRewardedUnitId,
+        request: const AdRequest(),
+        rewardedAdLoadCallback: RewardedAdLoadCallback(
+          onAdLoaded:       (ad) { _rewardedAd = ad; if (mounted) setState(() => _loading = false); },
+          onAdFailedToLoad: (_)  {                    if (mounted) setState(() => _loading = false); },
+        ),
+      );
+    }
   }
 
-  // ── טעינת Rewarded (30 שניות) ────────────────────────────────────────────
-  void _loadRewardedAd() {
-    RewardedAd.load(
-      adUnitId: Cfg.adRewardedUnitId,
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded:       (ad) { _rewardedAd = ad; if (mounted) setState(() => _loadingRewarded = false); },
-        onAdFailedToLoad: (_)  {                    if (mounted) setState(() => _loadingRewarded = false); },
-      ),
-    );
-  }
-
-  // ── טעינת Rewarded Interstitial (עם דילוג) ──────────────────────────────
-  void _loadRewardedInterstitialAd() {
-    RewardedInterstitialAd.load(
-      adUnitId: Cfg.adRewardedInterstitialUnitId,
-      request: const AdRequest(),
-      rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
-        onAdLoaded:       (ad) { _rewardedInterstitialAd = ad; if (mounted) setState(() => _loadingRewardedInterstitial = false); },
-        onAdFailedToLoad: (_)  {                                if (mounted) setState(() => _loadingRewardedInterstitial = false); },
-      ),
-    );
-  }
-
-  // ── הצגת Rewarded ─────────────────────────────────────────────────────────
-  void _showRewardedAd() {
+  void _showAd() {
     final ad = _rewardedAd;
     if (ad == null) return;
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdDismissedFullScreenContent:    (a) { a.dispose(); _rewardedAd = null; },
       onAdFailedToShowFullScreenContent: (a, _) { a.dispose(); _rewardedAd = null; },
     );
-    ad.show(onUserEarnedReward: (_, __) => _onComplete(Cfg.adRewardedEnergy));
+    ad.show(onUserEarnedReward: (_, __) => _onComplete());
   }
 
-  // ── הצגת Rewarded Interstitial ────────────────────────────────────────────
-  void _showRewardedInterstitialAd() {
-    final ad = _rewardedInterstitialAd;
-    if (ad == null) return;
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent:    (a) { a.dispose(); _rewardedInterstitialAd = null; },
-      onAdFailedToShowFullScreenContent: (a, _) { a.dispose(); _rewardedInterstitialAd = null; },
-    );
-    ad.show(onUserEarnedReward: (_, __) => _onComplete(Cfg.adRewardedInterstitialEnergy));
-  }
-
-  // ── השלמה ─────────────────────────────────────────────────────────────────
-  Future<void> _onComplete(int energy) async {
-    await EnergyService.instance.rewardFromAd(amount: energy);
-    Analytics.adWatchedForEnergy(amount: energy);
+  Future<void> _onComplete() async {
+    await EnergyService.instance.rewardFromAd(amount: Cfg.adRewardedEnergy);
+    Analytics.adWatchedForEnergy(amount: Cfg.adRewardedEnergy);
     if (!mounted) return;
-    setState(() { _done = true; _earnedEnergy = energy; });
+    setState(() => _done = true);
     _anim.forward();
     await HapticFeedback.lightImpact();
     await Future.delayed(const Duration(milliseconds: 150));
@@ -746,74 +864,45 @@ class _AdRewardDialogState extends State<_AdRewardDialog>
     });
   }
 
-  @override
-  void dispose() {
-    _rewardedAd?.dispose();
-    _rewardedInterstitialAd?.dispose();
-    _anim.dispose();
-    super.dispose();
-  }
+  @override void dispose() { _rewardedAd?.dispose(); _anim.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
+    if (_done) return Dialog(
+      backgroundColor: Pal.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ScaleTransition(scale: CurvedAnimation(parent: _anim, curve: Curves.easeOutBack),
+          child: const Text('🧠', style: TextStyle(fontSize: 72))),
+        const SizedBox(height: 14),
+        FadeTransition(opacity: _anim,
+          child: const Text('+2 מוחות!',
+            style: TextStyle(color: Pal.gold, fontSize: 24, fontWeight: FontWeight.w900))),
+      ])),
+    );
     return Dialog(
       backgroundColor: Pal.card,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(padding: const EdgeInsets.all(24), child: _done ? _doneView() : _mainView()),
+      child: Padding(padding: const EdgeInsets.all(24), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('🎬', style: TextStyle(fontSize: 48)),
+        const SizedBox(height: 10),
+        const Text('קבל 2 מוחות', style: TextStyle(color: Pal.tp, fontSize: 22, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        const Text('צפה בסרטון קצר', style: TextStyle(color: Pal.ts, fontSize: 13)),
+        const SizedBox(height: 22),
+        _AdButton(
+          loading: _loading, available: _rewardedAd != null,
+          emoji: '🎬', title: 'סרטון מלא', reward: '+2 🧠',
+          subtitle: 'לא ניתן לדלג · ~30 שניות',
+          color: Pal.gold, onTap: _showAd,
+        ),
+        const SizedBox(height: 14),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('לא תודה', style: TextStyle(color: Pal.ts))),
+      ])),
     );
   }
-
-  // ── מסך ראשי עם שני כפתורים ──────────────────────────────────────────────
-  Widget _mainView() => Column(mainAxisSize: MainAxisSize.min, children: [
-    const Text('🧠', style: TextStyle(fontSize: 48)),
-    const SizedBox(height: 10),
-    const Text('קבל מוחות',
-      style: TextStyle(color: Pal.tp, fontSize: 22, fontWeight: FontWeight.w800)),
-    const SizedBox(height: 4),
-    const Text('בחר איזה פרסומת לצפות',
-      style: TextStyle(color: Pal.ts, fontSize: 13)),
-    const SizedBox(height: 22),
-
-    _AdButton(
-      loading:   _loadingRewarded,
-      available: _rewardedAd != null,
-      emoji:     '🎬',
-      title:     'סרטון מלא',
-      reward:    '+5 🧠',
-      subtitle:  'לא ניתן לדלג · ~30 שניות',
-      color:     Pal.gold,
-      onTap:     _showRewardedAd,
-    ),
-    const SizedBox(height: 12),
-
-    _AdButton(
-      loading:   _loadingRewardedInterstitial,
-      available: _rewardedInterstitialAd != null,
-      emoji:     '⏩',
-      title:     'פרסומת קצרה',
-      reward:    '+1 🧠',
-      subtitle:  'ניתן לדלג אחרי כמה שניות',
-      color:     const Color(0xFF4D96FF),
-      onTap:     _showRewardedInterstitialAd,
-    ),
-    const SizedBox(height: 14),
-
-    TextButton(
-      onPressed: () => Navigator.pop(context),
-      child: const Text('לא תודה', style: TextStyle(color: Pal.ts))),
-  ]);
-
-  // ── מסך סיום ─────────────────────────────────────────────────────────────
-  Widget _doneView() => Column(mainAxisSize: MainAxisSize.min, children: [
-    ScaleTransition(
-      scale: CurvedAnimation(parent: _anim, curve: Curves.easeOutBack),
-      child: const Text('🧠', style: TextStyle(fontSize: 72))),
-    const SizedBox(height: 14),
-    FadeTransition(
-      opacity: _anim,
-      child: Text('+$_earnedEnergy אנרגיה!',
-        style: const TextStyle(color: Pal.gold, fontSize: 24, fontWeight: FontWeight.w900))),
-  ]);
 }
 
 // ── ווידג'ט עזר: כפתור פרסומת ────────────────────────────────────────────
@@ -2044,6 +2133,61 @@ class MistakesScreen extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════
+//  COUNTDOWN CLOCK (analog-style circular timer)
+// ═══════════════════════════════════════════════
+class _CountdownClock extends StatefulWidget {
+  const _CountdownClock();
+  @override State<_CountdownClock> createState() => _CountdownClockState();
+}
+class _CountdownClockState extends State<_CountdownClock> {
+  late final Timer _t;
+  @override void initState() { super.initState(); _t = Timer.periodic(const Duration(seconds:1),(_){if(mounted)setState((){});}); }
+  @override void dispose() { _t.cancel(); super.dispose(); }
+  @override Widget build(BuildContext context) {
+    final secs = EnergyService.instance.secondsUntilNext;
+    final total = Cfg.energyRechargeMins * 60;
+    final progress = total > 0 ? secs / total : 0.0;
+    final m = secs ~/ 60, s = secs % 60;
+    return Column(children: [
+      SizedBox(width:150, height:150, child: Stack(alignment:Alignment.center, children:[
+        CustomPaint(size:const Size(150,150), painter:_ClockPainter(progress:progress)),
+        const Text('🧠', style:TextStyle(fontSize:38)),
+      ])),
+      const SizedBox(height:12),
+      Text('${m.toString().padLeft(2,'0')}:${s.toString().padLeft(2,'0')}',
+        style:const TextStyle(color:Pal.gold, fontSize:32, fontWeight:FontWeight.w900)),
+      const SizedBox(height:4),
+      const Text('עד המוח הבא', style:TextStyle(color:Pal.ts, fontSize:13)),
+    ]);
+  }
+}
+class _ClockPainter extends CustomPainter {
+  final double progress;
+  const _ClockPainter({required this.progress});
+  @override void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width/2, size.height/2);
+    final r = size.width/2 - 10;
+    // Background ring
+    canvas.drawArc(Rect.fromCircle(center:c,radius:r), -pi/2, 2*pi, false,
+      Paint()..color=const Color(0xFF2A3A6E)..style=PaintingStyle.stroke..strokeWidth=10..strokeCap=StrokeCap.round);
+    // Progress arc (gold, remaining time)
+    if (progress > 0.002) {
+      canvas.drawArc(Rect.fromCircle(center:c,radius:r), -pi/2, 2*pi*progress, false,
+        Paint()..color=Pal.gold..style=PaintingStyle.stroke..strokeWidth=10..strokeCap=StrokeCap.round);
+    }
+    // 12 tick marks
+    for (int i=0;i<12;i++) {
+      final a = (i*30-90)*pi/180;
+      canvas.drawLine(
+        Offset(c.dx+(r+8)*cos(a), c.dy+(r+8)*sin(a)),
+        Offset(c.dx+(r-4)*cos(a), c.dy+(r-4)*sin(a)),
+        Paint()..color=Colors.white.withOpacity(0.2)..strokeWidth=1.5);
+    }
+  }
+  @override bool shouldRepaint(covariant _ClockPainter old) => old.progress != progress;
+}
+
+// ═══════════════════════════════════════════════
 //  NO ENERGY SCREEN
 // ═══════════════════════════════════════════════
 class NoEnergyScreen extends StatefulWidget {
@@ -2064,83 +2208,58 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
   @override Widget build(BuildContext context){
     final e=EnergyService.instance;
     final isPro=PurchaseService.instance.isPremium;
+    void openPaywall(){
+      Navigator.pop(context);
+      showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:Colors.transparent,
+        builder:(_)=>const PaywallSheet());
+    }
     return Scaffold(backgroundColor:Pal.bg,body:Stack(children:[
       const StarField(),
       SafeArea(child:Column(children:[
         Padding(padding:const EdgeInsets.fromLTRB(16,12,16,0),
           child:Row(children:[_iconBtn(Icons.arrow_back,()=>Navigator.pop(context))])),
-        Expanded(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(28),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
-          ScaleTransition(scale:CurvedAnimation(parent:_c,curve:Curves.easeOutBack),
-            child:const Text('\u{1F9E0}',style:TextStyle(fontSize:80))),
-          const SizedBox(height:16),
-          FadeTransition(opacity:_c,child:const Text('\u05E0\u05D2\u05DE\u05E8\u05D5 \u05D4\u05DE\u05D5\u05D7\u05D5\u05EA!',
+        Expanded(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.symmetric(horizontal:28,vertical:20),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
+          FadeTransition(opacity:_c,child:const Text('נגמרו המוחות!',
             style:TextStyle(color:Pal.tp,fontSize:26,fontWeight:FontWeight.w900))),
-          const SizedBox(height:20),
-          Container(
-            width:double.infinity,
-            padding:const EdgeInsets.all(20),
-            decoration:BoxDecoration(color:Pal.card,borderRadius:BorderRadius.circular(20),
-              border:Border.all(color:Pal.ts.withOpacity(0.2))),
-            child:Column(children:[
-              Row(mainAxisAlignment:MainAxisAlignment.center,children:[
-                const Text('\u26A1',style:TextStyle(fontSize:20)),const SizedBox(width:8),
-                Text('מוחות: ${e.energy} מתוך ${e.maxE}',
-                  textDirection:TextDirection.rtl,
-                  style:const TextStyle(color:Pal.tp,fontSize:17,fontWeight:FontWeight.w700)),
-              ]),
-              const SizedBox(height:14),
-              const Divider(color:Color(0x222A3A6E)),
-              const SizedBox(height:14),
-              Text(
-                isPro ? 'טעינה של 3 מוחות בכל רבע שעה' : 'מוח אחד מתווסף בכל רבע שעה',
-                textAlign:TextAlign.center,
-                style:const TextStyle(color:Pal.ts,fontSize:14,height:1.5)),
-              if(e.label.isNotEmpty)...[
-                const SizedBox(height:10),
-                Container(
-                  padding:const EdgeInsets.symmetric(horizontal:16,vertical:10),
-                  decoration:BoxDecoration(color:Pal.gold.withOpacity(0.1),borderRadius:BorderRadius.circular(12),
-                    border:Border.all(color:Pal.gold.withOpacity(0.3))),
-                  child:Text('המוח הבא בעוד: ${e.label}',
-                    style:const TextStyle(color:Pal.gold,fontSize:15,fontWeight:FontWeight.w700))),
-              ],
-            ])),
-          const SizedBox(height:20),
-          if(!isPro)...[
-            Container(
-              width:double.infinity,
-              padding:const EdgeInsets.all(20),
-              decoration:BoxDecoration(
-                gradient:LinearGradient(colors:[Pal.premium.withOpacity(0.18),Pal.premium.withOpacity(0.04)]),
-                borderRadius:BorderRadius.circular(20),
-                border:Border.all(color:Pal.premium.withOpacity(0.5))),
-              child:Column(children:[
-                const Text('\u{1F451}  \u05E8\u05DB\u05D5\u05E9 \u05E4\u05E8\u05D5',
-                  style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w900)),
-                const SizedBox(height:10),
-                Text(
-                  '50 מוחות במקום 15\nטעינה של 3 מוחות בכל רבע שעה',
-                  textAlign:TextAlign.center,
-                  style:const TextStyle(color:Pal.ts,fontSize:13,height:1.6)),
-                const SizedBox(height:16),
-                GestureDetector(
-                  onTap:(){
-                    Navigator.pop(context);
-                    showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:Colors.transparent,
-                      builder:(_)=>const PaywallSheet());
-                  },
-                  child:Container(width:double.infinity,
-                    padding:const EdgeInsets.symmetric(vertical:14),
-                    decoration:BoxDecoration(
-                      gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
-                      borderRadius:BorderRadius.circular(14)),
-                    child:const Text('רכישת פרו',
-                      textAlign:TextAlign.center,
-                      style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w900)))),
-              ])),
-            const SizedBox(height:16),
+          const SizedBox(height:6),
+          Text('🧠 ${e.energy}/${e.maxE}',style:const TextStyle(color:Pal.ts,fontSize:15)),
+          const SizedBox(height:28),
+          const _CountdownClock(),
+          const SizedBox(height:28),
+          if(e.canWatchAd)...[
+            GestureDetector(
+              onTap:()=>showDialog(context:context,builder:(_)=>_AdRewardDialog()),
+              child:Container(
+                width:double.infinity,
+                padding:const EdgeInsets.symmetric(vertical:16),
+                decoration:BoxDecoration(
+                  color:Pal.gold.withOpacity(0.12),
+                  border:Border.all(color:Pal.gold.withOpacity(0.6),width:1.5),
+                  borderRadius:BorderRadius.circular(18)),
+                child:const Column(children:[
+                  Text('🎬  צפה בסרטון',style:TextStyle(color:Pal.gold,fontSize:17,fontWeight:FontWeight.w800)),
+                  SizedBox(height:4),
+                  Text('קבל 2 מוחות 🧠 מיידית',textDirection:TextDirection.rtl,style:TextStyle(color:Pal.ts,fontSize:13)),
+                ]))),
+            const SizedBox(height:14),
           ],
-          _outBtn('\u05D7\u05D6\u05E8\u05D4',()=>Navigator.pop(context)),
+          if(!isPro)
+            GestureDetector(
+              onTap:openPaywall,
+              child:Container(
+                width:double.infinity,
+                padding:const EdgeInsets.symmetric(vertical:16),
+                decoration:BoxDecoration(
+                  gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
+                  borderRadius:BorderRadius.circular(18),
+                  boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.4),blurRadius:16,offset:const Offset(0,4))]),
+                child:const Column(children:[
+                  Text('👑  רכוש פרו',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900)),
+                  SizedBox(height:4),
+                  Text('מוחות · טעינה מהירה · ללא פרסומות',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
+                ]))),
+          const SizedBox(height:20),
+          _outBtn('חזרה',()=>Navigator.pop(context)),
         ])))),
       ])),
     ]));
@@ -2174,11 +2293,11 @@ class _PS extends State<PaywallSheet>{
           const SizedBox(height:16),
           const Text('ידען פרו',style:TextStyle(color:Pal.tp,fontSize:28,fontWeight:FontWeight.w900)),
           const SizedBox(height:6),
-          const Text('12.90 ₪ לחודש',style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w700)),
+          const Text('לחודש 12.90 ₪',textDirection:TextDirection.rtl,style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w700)),
           const SizedBox(height:24),
           _bf('🔴','שלבים קשים פתוחים'),
-          _bf('🧠','50 מוחות — פי 3 יותר מרגיל'),
-          _bf('🔄','טעינה של 3 מוחות כל רבע שעה'),
+          _bf('🧠','טעינה של 50 מוחות מיידית'),
+          _bf('🔄','טעינה של פי שלוש כל פעם'),
           _bf('🚫','ללא פרסומות'),
           _bf('🔓','גישה לכל התכנים העתידיים'),
           const SizedBox(height:24),
@@ -2210,8 +2329,9 @@ class _PS extends State<PaywallSheet>{
                   gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
                   borderRadius:BorderRadius.circular(18),
                   boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.5),blurRadius:16,offset:const Offset(0,4))]),
-                child:const Text('התחל עכשיו — 12.90 ₪ לחודש',
+                child:const Text('התחל עכשיו — ‏12.90 ₪ לחודש',
                   textAlign:TextAlign.center,
+                  textDirection:TextDirection.rtl,
                   style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w900)))),
             const SizedBox(height:10),
             GestureDetector(
@@ -2226,8 +2346,9 @@ class _PS extends State<PaywallSheet>{
               child:const Text('שחזר רכישות',style:TextStyle(color:Pal.ts,fontSize:13,decoration:TextDecoration.underline))),
             const SizedBox(height:16),
             const Text(
-              'המנוי מתחדש אוטומטית ב-12.90 ₪ לחודש אלא אם כן בוטל לפחות 24 שעות לפני סוף התקופה. ניתן לנהל ולבטל את המנוי בהגדרות ה-Apple ID שלך.',
+              'המנוי מתחדש אוטומטית ב־12.90 ₪ לחודש אלא אם כן בוטל לפחות 24 שעות לפני סוף התקופה. ניתן לנהל ולבטל את המנוי בהגדרות ה־Apple ID שלך.',
               textAlign:TextAlign.center,
+              textDirection:TextDirection.rtl,
               style:TextStyle(color:Pal.ts,fontSize:11)),
             const SizedBox(height:8),
             Row(mainAxisAlignment:MainAxisAlignment.center,children:[
@@ -2246,11 +2367,11 @@ class _PS extends State<PaywallSheet>{
   }
   Widget _bf(String e,String t)=>Padding(
     padding:const EdgeInsets.only(bottom:14),
-    child:Row(children:[
+    child:Directionality(textDirection:TextDirection.rtl,child:Row(children:[
       Text(e,style:const TextStyle(fontSize:20)),
       const SizedBox(width:14),
-      Expanded(child:Text(t,style:const TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w600))),
-    ]));
+      Expanded(child:Text(t,textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w600))),
+    ])));
 }
 
 
