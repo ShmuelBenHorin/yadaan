@@ -236,7 +236,7 @@ class LevelService extends ChangeNotifier {
     final prevStart = (seg-1)*Cfg.segmentSize;
     int prevStars = 0;
     for(int i=prevStart;i<prevStart+Cfg.segmentSize;i++) prevStars+=starsFor(d,i);
-    return prevStars >= seg * Cfg.starsPerSegment;
+    return prevStars >= Cfg.starsPerSegment;
   }
   String segmentProgress(Diff d, int idx) {
     final seg = idx ~/ Cfg.segmentSize;
@@ -244,7 +244,7 @@ class LevelService extends ChangeNotifier {
     final prevStart = (seg-1)*Cfg.segmentSize;
     int prevStars = 0;
     for(int i=prevStart;i<prevStart+Cfg.segmentSize;i++) prevStars+=starsFor(d,i);
-    return "$prevStars/${seg * Cfg.starsPerSegment} ⭐";
+    return "$prevStars/${Cfg.starsPerSegment} ⭐";
   }
   Future<void> save(Diff d,int idx,int stars) async {
     if (stars>starsFor(d,idx)) {
@@ -754,7 +754,13 @@ class _EnergyChipState extends State<EnergyChip> with SingleTickerProviderStateM
         animation: _scale,
         builder: (_, child) => Transform.scale(scale: _scale.value, child: child),
         child: GestureDetector(
-          onTap: e.canWatchAd ? () => _showAdDialog(context) : null,
+          onTap: () {
+            if (e.canWatchAd) {
+              _showAdDialog(context);
+            } else if (!PurchaseService.instance.isPremium) {
+              Navigator.push(context, _slide(const NoEnergyScreen()));
+            }
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -1036,6 +1042,23 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
                     Icon(Icons.chevron_right,color:color,size:18),
                   ]))));
           }).toList(),
+          const SizedBox(height:16),
+          if(!PurchaseService.instance.isPremium)
+            ListenableBuilder(listenable:PurchaseService.instance,builder:(_,__)=>
+              GestureDetector(
+                onTap:()=>showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:Colors.transparent,builder:(_)=>const PaywallSheet()),
+                child:Container(
+                  width:double.infinity,
+                  padding:const EdgeInsets.symmetric(vertical:16),
+                  decoration:BoxDecoration(
+                    gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
+                    borderRadius:BorderRadius.circular(18),
+                    boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.4),blurRadius:16,offset:const Offset(0,4))]),
+                  child:const Column(children:[
+                    Text('👑  רכוש פרו',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900)),
+                    SizedBox(height:4),
+                    Text('מוחות · טעינה מהירה · ללא פרסומות',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
+                  ])))),
           const SizedBox(height:24),
         ]))),
       ])),
@@ -1125,7 +1148,7 @@ class _StarsBar extends StatelessWidget {
         border:Border.all(color:Pal.gold.withOpacity(0.2))),
       child:Row(children:[
         const Text('\u2B50',style:TextStyle(fontSize:15)),const SizedBox(width:8),
-        Text('$all \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD',style:const TextStyle(color:Pal.gold,fontWeight:FontWeight.w700,fontSize:13)),
+        Text('$all \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD',textDirection:TextDirection.ltr,style:const TextStyle(color:Pal.gold,fontWeight:FontWeight.w700,fontSize:13)),
         if(next!=null)...[
           const SizedBox(width:10),
           Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(4),
