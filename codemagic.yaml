@@ -24,6 +24,7 @@ workflows:
 
       - name: Install CocoaPods
         script: |
+          rm -rf ~/Library/Developer/Xcode/DerivedData
           find . -name "Podfile" -execdir pod install \;
 
       - name: Generate app icons
