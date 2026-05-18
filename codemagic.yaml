@@ -19,6 +19,9 @@ workflows:
         bundle_identifier: master.trivia
 
     scripts:
+      - name: Check Xcode version
+        script: xcodebuild -version
+
       - name: Get Flutter packages
         script: flutter pub get
 
