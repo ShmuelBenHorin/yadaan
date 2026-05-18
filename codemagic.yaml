@@ -9,7 +9,7 @@ workflows:
 
     environment:
       flutter: stable
-      xcode: 16.3
+      xcode: 16.2
       cocoapods: default
       ios_signing:
         provisioning_profiles:
@@ -21,6 +21,10 @@ workflows:
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
+
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install --repo-update
 
       - name: Generate app icons
         script: dart run flutter_launcher_icons
