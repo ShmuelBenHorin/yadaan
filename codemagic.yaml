@@ -24,7 +24,7 @@ workflows:
 
       - name: Install CocoaPods
         script: |
-          cd ios && pod install --repo-update
+          find . -name "Podfile" -execdir pod install \;
 
       - name: Generate app icons
         script: dart run flutter_launcher_icons
