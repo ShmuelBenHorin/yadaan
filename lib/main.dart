@@ -2387,7 +2387,7 @@ class _PS extends State<PaywallSheet>{
                 child:const Text('מדיניות פרטיות',style:TextStyle(color:Pal.ts,fontSize:11,decoration:TextDecoration.underline))),
               const Text('  |  ',style:TextStyle(color:Pal.ts,fontSize:11)),
               GestureDetector(
-                onTap:()=>_launchUrl('https://sites.google.com/view/yadaan-privacy-policy/%D7%91%D7%99%D7%AA'),
+                onTap:()=>_launchUrl('https://sites.google.com/view/yadaan-terms-of-use/%D7%91%D7%99%D7%AA'),
                 child:const Text('תנאי שימוש',style:TextStyle(color:Pal.ts,fontSize:11,decoration:TextDecoration.underline))),
             ]),
             const SizedBox(height:8),
