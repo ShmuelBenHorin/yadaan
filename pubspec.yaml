@@ -1,7 +1,7 @@
 name: yidaan
 description: "ידען — חידון שלבים"
 publish_to: 'none'
-version: 1.6.0+24
+version: 1.6.1+25
 
 environment:
   sdk: ^3.11.1
@@ -17,6 +17,7 @@ dependencies:
   url_launcher: ^6.3.0
   firebase_core: ^3.6.0
   firebase_analytics: ^11.3.0
+  in_app_review: ^2.0.9
 
 dev_dependencies:
   flutter_test:

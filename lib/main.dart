@@ -10,6 +10,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:in_app_review/in_app_review.dart';
 
 import 'questions_easy.dart';
 import 'questions_medium.dart';
@@ -2781,6 +2782,24 @@ class _ResultViewState extends State<_ResultView> with TickerProviderStateMixin 
     Future.delayed(const Duration(milliseconds:1800), () {
       if (mounted) setState(() => _showBtns = true);
     });
+    _maybeRequestReview();
+  }
+
+  Future<void> _maybeRequestReview() async {
+    final pct = widget.correct / widget.total;
+    if (pct < 0.5) return; // רק אם עבר 50%
+    try {
+      final p = await SharedPreferences.getInstance();
+      final completed = (p.getInt('levels_completed') ?? 0) + 1;
+      await p.setInt('levels_completed', completed);
+      if (completed == 3 || completed == 10 || completed == 30) {
+        await Future.delayed(const Duration(milliseconds: 2500));
+        final review = InAppReview.instance;
+        if (await review.isAvailable()) {
+          await review.requestReview();
+        }
+      }
+    } catch (_) {}
   }
 
   @override void dispose() {
