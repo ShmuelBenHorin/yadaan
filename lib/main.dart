@@ -1144,6 +1144,7 @@ class _HomeCats {
     ('tv','טלוויזיה','📺',Color(0xFF9B59B6)),
     ('music','מוזיקה','🎵',Color(0xFFE91E8C)),
     ('sports','ספורט','⚽',Color(0xFFE74C3C)),
+    ('football','כדורגל ישראלי','🏟️',Color(0xFF27AE60)),
     ('geography','גיאוגרפיה','🌍',Color(0xFF2ECC71)),
     ('science','מדע','🔬',Color(0xFF3498DB)),
     ('world','תרבות עולמית','🎬',Color(0xFFE67E22)),
