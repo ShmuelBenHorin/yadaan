@@ -23,7 +23,9 @@ workflows:
         script: xcodebuild -version
 
       - name: Get Flutter packages
-        script: flutter pub get
+        script: |
+          flutter config --no-enable-swift-package-manager
+          flutter pub get
 
       - name: Install CocoaPods
         script: |
