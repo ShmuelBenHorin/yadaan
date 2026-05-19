@@ -1139,12 +1139,12 @@ void _showCatDiffPicker(BuildContext ctx,String key,String name,String emoji,Col
 
 class _HomeCats {
   static const cats = [
+    ('football','כדורגל ישראלי','🏟️',Color(0xFF27AE60)),
     ('israel','ישראל','🇮🇱',Color(0xFF4D96FF)),
     ('judaism','יהדות','✡️',Color(0xFF7C6FE0)),
     ('tv','טלוויזיה','📺',Color(0xFF9B59B6)),
     ('music','מוזיקה','🎵',Color(0xFFE91E8C)),
     ('sports','ספורט','⚽',Color(0xFFE74C3C)),
-    ('football','כדורגל ישראלי','🏟️',Color(0xFF27AE60)),
     ('geography','גיאוגרפיה','🌍',Color(0xFF2ECC71)),
     ('science','מדע','🔬',Color(0xFF3498DB)),
     ('world','תרבות עולמית','🎬',Color(0xFFE67E22)),
