@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "220793630427",
+    "project_id": "yadaan-f87b6",
+    "storage_bucket": "yadaan-f87b6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:220793630427:android:9414a6f7ebb503e274e6fe",
+        "android_client_info": {
+          "package_name": "trivia.master"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfiIYRN8bzkQgsyGfnC8PwlpIGssSZhcI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
