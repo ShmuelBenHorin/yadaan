@@ -2,6 +2,8 @@
     <!-- AdMob: Internet access + Ad ID (Android 13+) -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
+    <!-- Google Play Billing -->
+    <uses-permission android:name="com.android.vending.BILLING"/>
     <application
         android:label="trivia_master"
         android:name="${applicationName}"
