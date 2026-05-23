@@ -357,8 +357,13 @@ class PurchaseService extends ChangeNotifier {
       _pro=ci.entitlements.all[Cfg.entitlement]?.isActive??false;
       if(_pro){EnergyService.instance._e=EnergyService.instance.maxE;EnergyService.instance.notifyListeners();}
       _loading=false;notifyListeners();return _pro;
-    }on PurchasesErrorCode catch(e){
-      if(e!=PurchasesErrorCode.purchaseCancelledError)debugPrint('err');
+    }on PurchasesError catch(e){
+      debugPrint('RC purchase error: ${e.code} — ${e.message}');
+      _loading=false;notifyListeners();
+      if(e.code==PurchasesErrorCode.purchaseCancelledError)return false;
+      rethrow;
+    }catch(e){
+      debugPrint('RC purchase unknown error: $e');
       _loading=false;notifyListeners();return false;
     }
   }
@@ -2351,14 +2356,24 @@ class _PS extends State<PaywallSheet>{
             else GestureDetector(
               onTap:()async{
                 setState(()=>_errMsg=null);
-                await ps.loadOfferings();
+                // reload only if packages not yet loaded
+                if(ps.packages.isEmpty) await ps.loadOfferings();
                 if(!mounted)return;
                 if(ps.packages.isEmpty){
                   setState(()=>_errMsg='לא ניתן לטעון מוצרים. בדוק חיבור לאינטרנט ונסה שוב.');
                   return;
                 }
-                final ok=await ps.purchase(ps.packages.first);
-                if(ok&&mounted)Navigator.pop(context);
+                try{
+                  final ok=await ps.purchase(ps.packages.first);
+                  if(!mounted)return;
+                  if(ok) Navigator.pop(context);
+                }on PurchasesError catch(e){
+                  if(!mounted)return;
+                  setState(()=>_errMsg='שגיאת רכישה: ${e.message}');
+                }catch(e){
+                  if(!mounted)return;
+                  setState(()=>_errMsg='שגיאה: $e');
+                }
               },
               child:Container(width:double.infinity,
                 padding:const EdgeInsets.symmetric(vertical:18),
