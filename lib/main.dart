@@ -2803,17 +2803,38 @@ class _ResultViewState extends State<_ResultView> with TickerProviderStateMixin 
 
   Future<void> _maybeRequestReview() async {
     final pct = widget.correct / widget.total;
-    if (pct < 0.5) return; // רק אם עבר 50%
+    if (pct < 0.5) return;
     try {
       final p = await SharedPreferences.getInstance();
       final completed = (p.getInt('levels_completed') ?? 0) + 1;
       await p.setInt('levels_completed', completed);
-      if (completed == 3 || completed == 10 || completed == 30) {
+
+      // שלב 1 — דיאלוג "נהנית?" עם מעקב Firebase
+      if (completed == 1) {
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (!mounted) return;
+        final enjoyed = await showDialog<bool?>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const _EnjoyedDialog(),
+        );
+        if (enjoyed == true) {
+          FirebaseAnalytics.instance.logEvent(name: 'review_prompt_yes');
+          final review = InAppReview.instance;
+          if (await review.isAvailable()) await review.requestReview();
+        } else if (enjoyed == false) {
+          FirebaseAnalytics.instance.logEvent(name: 'review_prompt_no');
+        } else {
+          FirebaseAnalytics.instance.logEvent(name: 'review_prompt_skip');
+        }
+        return;
+      }
+
+      // שלבים 10 ו-30 — פופ-אפ ישיר
+      if (completed == 10 || completed == 30) {
         await Future.delayed(const Duration(milliseconds: 2500));
         final review = InAppReview.instance;
-        if (await review.isAvailable()) {
-          await review.requestReview();
-        }
+        if (await review.isAvailable()) await review.requestReview();
       }
     } catch (_) {}
   }
@@ -2974,6 +2995,66 @@ class _CatAnsBtnState extends State<_CatAnsBtn> with SingleTickerProviderStateMi
             Expanded(child:Text(widget.q.a[widget.index],textDirection:TextDirection.rtl,style:TextStyle(color:widget.fb&&widget.index!=widget.q.c&&widget.index!=widget.sel?Pal.ts:Pal.tp,fontSize:16,fontWeight:FontWeight.w600))),
             if(widget.fb)Text(widget.index==widget.q.c?'✅':widget.index==widget.sel?'❌':'',style:const TextStyle(fontSize:18)),
           ]))));
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  ENJOYED DIALOG
+// ═══════════════════════════════════════════════
+class _EnjoyedDialog extends StatelessWidget {
+  const _EnjoyedDialog();
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Dialog(
+        backgroundColor: Pal.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('😊', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 12),
+            const Text('נהנית עד עכשיו?',
+              style: TextStyle(color: Pal.tp, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            const Text('נשמח לדירוג קטן שיעזור לנו לגדול',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Pal.ts, fontSize: 14)),
+            const SizedBox(height: 24),
+            Row(children: [
+              Expanded(child: GestureDetector(
+                onTap: () => Navigator.pop(context, false),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Pal.cardL,
+                    borderRadius: BorderRadius.circular(14)),
+                  child: const Text('לא 😕',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Pal.ts, fontSize: 15, fontWeight: FontWeight.w700))))),
+              const SizedBox(width: 10),
+              Expanded(child: GestureDetector(
+                onTap: () => Navigator.pop(context, true),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFFFF9F0A), Color(0xFFFF6B00)]),
+                    borderRadius: BorderRadius.circular(14)),
+                  child: const Text('כן 😊',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800))))),
+            ]),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => Navigator.pop(context, null),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6),
+                child: Text('דלג', style: TextStyle(color: Pal.ts, fontSize: 13, decoration: TextDecoration.underline)))),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
