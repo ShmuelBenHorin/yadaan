@@ -11,6 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:in_app_review/in_app_review.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
 
 import 'questions_easy.dart';
 import 'questions_medium.dart';
@@ -70,30 +73,141 @@ class Analytics {
   static FirebaseAnalytics? _fa;
   static int _sessionStages = 0;
 
-  static Future<void> init() async {
-    _fa = FirebaseAnalytics.instance;
-  }
+  static Future<void> init() async { _fa = FirebaseAnalytics.instance; }
 
   static void levelStarted() { _sessionStages++; }
 
+  // אנרגיה
   static Future<void> energyDepleted() async {
     try { await _fa?.logEvent(name:'energy_depleted',
       parameters:{'stages_played':_sessionStages}); } catch(_){}
   }
-
+  static Future<void> energyDepletedUserLeft() async {
+    try { await _fa?.logEvent(name:'energy_depleted_user_left',
+      parameters:{'stages_played':_sessionStages}); } catch(_){}
+  }
   static Future<void> adWatchedForEnergy({required int amount}) async {
     try { await _fa?.logEvent(name:'ad_watched_for_energy',
       parameters:{'energy_gained':amount}); } catch(_){}
   }
 
-  static Future<void> energyDepletedUserLeft() async {
-    try { await _fa?.logEvent(name:'energy_depleted_user_left',
-      parameters:{'stages_played':_sessionStages}); } catch(_){}
+  // מסך אין אנרגיה — מה המשתמש עשה
+  static Future<void> noEnergyAction(String action) async {
+    // action: 'bought_pro' | 'watched_ad' | 'left'
+    try { await _fa?.logEvent(name:'no_energy_action',
+      parameters:{'action':action,'stages_played':_sessionStages}); } catch(_){}
   }
 
+  // שלבים
+  static Future<void> levelCompleted({required String diff, required int levelIndex, required int stars}) async {
+    try { await _fa?.logEvent(name:'level_completed',
+      parameters:{'diff':diff,'level':levelIndex,'stars':stars}); } catch(_){}
+  }
+  static Future<void> levelFailed({required String diff, required int levelIndex}) async {
+    try { await _fa?.logEvent(name:'level_failed',
+      parameters:{'diff':diff,'level':levelIndex}); } catch(_){}
+  }
+  static Future<void> levelQuit({required String diff, required int levelIndex}) async {
+    try { await _fa?.logEvent(name:'level_quit',
+      parameters:{'diff':diff,'level':levelIndex,'stages_played':_sessionStages}); } catch(_){}
+  }
+
+  // paywall — מסך רכישה
+  static Future<void> paywallShown(String source) async {
+    // source: 'no_energy' | 'locked_level' | 'category'
+    try { await _fa?.logEvent(name:'paywall_shown',
+      parameters:{'source':source}); } catch(_){}
+  }
+  static Future<void> paywallDismissed() async {
+    try { await _fa?.logEvent(name:'paywall_dismissed'); } catch(_){}
+  }
+
+  // חידון קטגוריה
+  static Future<void> categoryQuizStarted(String category) async {
+    try { await _fa?.logEvent(name:'category_quiz_started',
+      parameters:{'category':category}); } catch(_){}
+  }
+  static Future<void> categoryQuizCompleted({required String category, required int correct, required int total}) async {
+    try { await _fa?.logEvent(name:'category_quiz_completed',
+      parameters:{'category':category,'correct':correct,'total':total}); } catch(_){}
+  }
+
+  // סיום סשן
   static Future<void> sessionEnded() async {
     try { await _fa?.logEvent(name:'session_ended',
       parameters:{'stages_played':_sessionStages,'energy_remaining':EnergyService.instance.energy}); } catch(_){}
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  NOTIFICATIONS
+// ═══════════════════════════════════════════════
+class NotificationService {
+  static final _plugin = FlutterLocalNotificationsPlugin();
+  static const _channelId   = 'yadaan_energy';
+  static const _channelName = 'אנרגיה';
+  static const _energyId    = 1;
+  static const _dailyId     = 2;
+
+  static Future<void> init() async {
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iOS     = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    await _plugin.initialize(
+      const InitializationSettings(android: android, iOS: iOS),
+    );
+    // צור channel לאנדרואיד
+    await _plugin.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(const AndroidNotificationChannel(
+        _channelId, _channelName,
+        importance: Importance.high,
+      ));
+  }
+
+  // בקש הרשאה (iOS בלבד — אנדרואיד אוטומטי מ-13+)
+  static Future<void> requestPermission() async {
+    await _plugin.resolvePlatformSpecificImplementation<
+      IOSFlutterLocalNotificationsPlugin>()
+      ?.requestPermissions(alert: true, badge: true, sound: true);
+    await _plugin.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>()
+      ?.requestNotificationsPermission();
+  }
+
+  // שלח notification כשהאנרגיה מלאה
+  static Future<void> scheduleEnergyFull(int minutesUntilFull) async {
+    await _plugin.cancel(_energyId);
+    if (minutesUntilFull <= 0) return;
+    final when = DateTime.now().add(Duration(minutes: minutesUntilFull));
+    await _plugin.zonedSchedule(
+      _energyId,
+      '🧠 האנרגיה שלך התמלאה!',
+      'בוא לשחק ידען — הכל מחכה לך',
+      _toTZDateTime(when),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId, _channelName,
+          importance: Importance.high, priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  // ביטול notification אנרגיה (כשנכנסים לאפליקציה)
+  static Future<void> cancelEnergyNotification() async {
+    await _plugin.cancel(_energyId);
+  }
+
+  static tz.TZDateTime _toTZDateTime(DateTime dt) {
+    return tz.TZDateTime.from(dt, tz.local);
   }
 }
 
@@ -291,7 +405,11 @@ class EnergyService extends ChangeNotifier {
     final wasPositive = _e > 0;
     _e=(_e-n).clamp(0,maxE);
     await _save();
-    if (wasPositive && _e == 0) Analytics.energyDepleted();
+    if (wasPositive && _e == 0) {
+      Analytics.energyDepleted();
+      final minsUntilFull = (maxE / rechargeAmt).ceil() * Cfg.energyRechargeMins;
+      NotificationService.scheduleEnergyFull(minsUntilFull);
+    }
     notifyListeners();
   }
   Future<void> _save() async {
@@ -551,7 +669,9 @@ void main() async {
     statusBarIconBrightness: Brightness.light,
     systemNavigationBarIconBrightness: Brightness.light,
   ));
+  tz_data.initializeTimeZones();
   try { await Firebase.initializeApp(); await Analytics.init(); } catch(e) { debugPrint('Firebase init failed: $e'); }
+  await NotificationService.init();
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
@@ -574,6 +694,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     if(s==AppLifecycleState.paused||s==AppLifecycleState.detached){
       Analytics.sessionEnded();
       if(EnergyService.instance.energy==0) Analytics.energyDepletedUserLeft();
+    }
+    if(s==AppLifecycleState.resumed){
+      NotificationService.cancelEnergyNotification();
+      EnergyService.instance._check();
     }
   }
   @override Widget build(BuildContext context) {
@@ -1260,7 +1384,7 @@ class _DiffCard extends StatelessWidget {
           ])));
     });
   }
-  void _paywall(BuildContext ctx){showModalBottomSheet(context:ctx,isScrollControlled:true,backgroundColor:Colors.transparent,builder:(_)=>const PaywallSheet());}
+  void _paywall(BuildContext ctx){Analytics.paywallShown('locked_level');showModalBottomSheet(context:ctx,isScrollControlled:true,backgroundColor:Colors.transparent,builder:(_)=>const PaywallSheet()).then((_){if(!PurchaseService.instance.isPremium)Analytics.paywallDismissed();});}
 }
 
 // ═══════════════════════════════════════════════
@@ -1646,8 +1770,8 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
       _energyLossCtrl.forward(from:0);
     }
     setState((){});
-    if(_gs.phase==Phase.complete&&!_exiting){_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});}
-    if(_gs.phase==Phase.failed&&!_exiting){final fq=_gs.failedQuestions;_exiting=true;Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex,failedQuestions:fq)));});}
+    if(_gs.phase==Phase.complete&&!_exiting){_exiting=true;Analytics.levelCompleted(diff:widget.diff.name,levelIndex:widget.levelIndex,stars:_gs.stars);Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});}
+    if(_gs.phase==Phase.failed&&!_exiting){final fq=_gs.failedQuestions;_exiting=true;Analytics.levelFailed(diff:widget.diff.name,levelIndex:widget.levelIndex);Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex,failedQuestions:fq)));});}
   }
   @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();super.dispose();}
   Future<bool> _quit() async {
@@ -1662,7 +1786,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
         SafeArea(child:Column(children:[
           // Top bar
           Padding(padding:const EdgeInsets.fromLTRB(16,8,16,0),child:Row(children:[
-            _iconBtn(Icons.close,()async{final l=await _quit();if(l&&mounted)Navigator.pop(context);}),const SizedBox(width:8),_iconBtn(Icons.refresh_rounded,()async{final l=await showDialog<bool>(context:context,barrierDismissible:false,builder:(_)=>_RestartDlg());if((l??false)&&mounted){setState((){});_gs.removeListener(_onChange);_gs.dispose();setState((){_gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex);_gs.addListener(_onChange);_exiting=false;_cardCtrl.forward(from:0);});}}),
+            _iconBtn(Icons.close,()async{final l=await _quit();if(l&&mounted){Analytics.levelQuit(diff:widget.diff.name,levelIndex:widget.levelIndex);Navigator.pop(context);}}),const SizedBox(width:8),_iconBtn(Icons.refresh_rounded,()async{final l=await showDialog<bool>(context:context,barrierDismissible:false,builder:(_)=>_RestartDlg());if((l??false)&&mounted){setState((){});_gs.removeListener(_onChange);_gs.dispose();setState((){_gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex);_gs.addListener(_onChange);_exiting=false;_cardCtrl.forward(from:0);});}}),
             const SizedBox(width:12),
             Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Text('\u05E9\u05DC\u05D1 ${_gs.levelIdx+1} \u00B7 ${widget.diff.label}',style:const TextStyle(color:Pal.ts,fontSize:11,fontWeight:FontWeight.w600)),
@@ -2251,6 +2375,8 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
     final e=EnergyService.instance;
     final isPro=PurchaseService.instance.isPremium;
     void openPaywall(){
+      Analytics.noEnergyAction('bought_pro');
+      Analytics.paywallShown('no_energy');
       Navigator.pop(context);
       showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:Colors.transparent,
         builder:(_)=>const PaywallSheet());
@@ -2259,7 +2385,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
       const StarField(),
       SafeArea(child:Column(children:[
         Padding(padding:const EdgeInsets.fromLTRB(16,12,16,0),
-          child:Row(children:[_iconBtn(Icons.arrow_back,()=>Navigator.pop(context))])),
+          child:Row(children:[_iconBtn(Icons.arrow_back,(){Analytics.noEnergyAction('left');Navigator.pop(context);})])),
         Expanded(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.symmetric(horizontal:28,vertical:20),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[
           FadeTransition(opacity:_c,child:const Text('נגמרו המוחות!',
             style:TextStyle(color:Pal.tp,fontSize:26,fontWeight:FontWeight.w900))),
@@ -2270,7 +2396,7 @@ class _NES extends State<NoEnergyScreen> with SingleTickerProviderStateMixin {
           const SizedBox(height:28),
           if(e.canWatchAd)...[
             GestureDetector(
-              onTap:()=>showDialog(context:context,builder:(_)=>_AdRewardDialog()),
+              onTap:(){Analytics.noEnergyAction('watched_ad');showDialog(context:context,builder:(_)=>_AdRewardDialog());},
               child:Container(
                 width:double.infinity,
                 padding:const EdgeInsets.symmetric(vertical:16),
@@ -2561,6 +2687,7 @@ class _CQState extends State<CategoryQuizScreen> with TickerProviderStateMixin {
     _questions = pool.take(_maxQ).toList();
     // כניסה לחידון עולה 1 אנרגיה
     EnergyService.instance.spend(Cfg.energyCostWrong);
+    Analytics.categoryQuizStarted(widget.category);
     _startTimer();
   }
 
@@ -2616,7 +2743,7 @@ class _CQState extends State<CategoryQuizScreen> with TickerProviderStateMixin {
       onPlayAgain: () => Navigator.pushReplacement(context, _slide(
         CategoryQuizScreen(category:widget.category, name:widget.name,
           emoji:widget.emoji, color:widget.color))),
-      onBack: () => Navigator.pop(context));
+      onBack: (){Analytics.categoryQuizCompleted(category:widget.category,correct:_correct,total:_maxQ);Navigator.pop(context);});
 
     final pct = _timerSecs / Cfg.timerSecs;
     final tc = pct>0.5?const Color(0xFF4D96FF):pct>0.25?const Color(0xFFF39C12):Pal.red;
@@ -2818,6 +2945,7 @@ class _ResultViewState extends State<_ResultView> with TickerProviderStateMixin 
           barrierDismissible: false,
           builder: (_) => const _EnjoyedDialog(),
         );
+        await NotificationService.requestPermission();
         if (enjoyed == true) {
           FirebaseAnalytics.instance.logEvent(name: 'review_prompt_yes');
           final review = InAppReview.instance;
