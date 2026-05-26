@@ -2025,6 +2025,34 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
         _levelUpCtrl.forward();
       }
     });
+    _maybeRequestReview();
+  }
+
+  Future<void> _maybeRequestReview() async {
+    try {
+      final p = await SharedPreferences.getInstance();
+      final shownReview = p.getBool('review_dialog_shown') ?? false;
+      if (shownReview) return;
+      await p.setBool('review_dialog_shown', true);
+      await Future.delayed(const Duration(milliseconds: 2500));
+      if (!mounted) return;
+      final enjoyed = await showDialog<bool?>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _EnjoyedDialog(),
+      );
+      await NotificationService.requestPermission();
+      if (!mounted) return;
+      if (enjoyed == true) {
+        FirebaseAnalytics.instance.logEvent(name: 'review_prompt_yes');
+        final review = InAppReview.instance;
+        if (await review.isAvailable()) await review.requestReview();
+      } else if (enjoyed == false) {
+        FirebaseAnalytics.instance.logEvent(name: 'review_prompt_no');
+      } else {
+        FirebaseAnalytics.instance.logEvent(name: 'review_prompt_skip');
+      }
+    } catch (_) {}
   }
 
   @override void dispose() {
@@ -2936,8 +2964,10 @@ class _ResultViewState extends State<_ResultView> with TickerProviderStateMixin 
       final completed = (p.getInt('levels_completed') ?? 0) + 1;
       await p.setInt('levels_completed', completed);
 
-      // שלב 1 — דיאלוג "נהנית?" עם מעקב Firebase
-      if (completed == 1) {
+      // דיאלוג "נהנית?" — מוצג פעם אחת בלבד
+      final shownReview = p.getBool('review_dialog_shown') ?? false;
+      if (!shownReview) {
+        await p.setBool('review_dialog_shown', true);
         await Future.delayed(const Duration(milliseconds: 1500));
         if (!mounted) return;
         final enjoyed = await showDialog<bool?>(
