@@ -1277,6 +1277,7 @@ class _HomeCats {
     ('geography','גיאוגרפיה','🌍',Color(0xFF2ECC71)),
     ('science','מדע','🔬',Color(0xFF3498DB)),
     ('world','תרבות עולמית','🎬',Color(0xFFE67E22)),
+    ('american_music','מוזיקה אמריקאית','🎸',Color(0xFFD35400)),
   ];
 }
 
@@ -2590,14 +2591,15 @@ class CategorySelectScreen extends StatelessWidget {
   const CategorySelectScreen({super.key});
 
   static const _cats = [
-    ('israel',    'ישראל',         '🇮🇱', Color(0xFF4D96FF)),
-    ('judaism',   'יהדות',         '✡️',  Color(0xFF7C6FE0)),
-    ('tv',        'טלוויזיה',      '📺',  Color(0xFF9B59B6)),
-    ('music',     'מוזיקה',        '🎵',  Color(0xFFE91E8C)),
-    ('sports',    'ספורט',         '⚽',  Color(0xFFE74C3C)),
-    ('geography', 'גיאוגרפיה',     '🌍',  Color(0xFF2ECC71)),
-    ('science',   'מדע',           '🔬',  Color(0xFF3498DB)),
-    ('world',     'תרבות עולמית',  '🎬',  Color(0xFFE67E22)),
+    ('israel',         'ישראל',          '🇮🇱', Color(0xFF4D96FF)),
+    ('judaism',        'יהדות',          '✡️',  Color(0xFF7C6FE0)),
+    ('tv',             'טלוויזיה',       '📺',  Color(0xFF9B59B6)),
+    ('music',          'מוזיקה',         '🎵',  Color(0xFFE91E8C)),
+    ('sports',         'ספורט',          '⚽',  Color(0xFFE74C3C)),
+    ('geography',      'גיאוגרפיה',      '🌍',  Color(0xFF2ECC71)),
+    ('science',        'מדע',            '🔬',  Color(0xFF3498DB)),
+    ('world',          'תרבות עולמית',   '🎬',  Color(0xFFE67E22)),
+    ('american_music', 'מוזיקה אמריקאית', '🎸',  Color(0xFFD35400)),
   ];
 
   @override

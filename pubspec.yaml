@@ -1,7 +1,7 @@
 name: yidaan
 description: "ידען — חידון שלבים"
 publish_to: 'none'
-version: 1.7.2+39
+version: 1.7.4+41
 
 environment:
   sdk: ^3.11.1
@@ -29,7 +29,7 @@ dev_dependencies:
 
 flutter_launcher_icons:
   ios: true
-  android: false
+  android: true
   image_path: "screen shots/icon_512.png"
   remove_alpha_ios: true
 

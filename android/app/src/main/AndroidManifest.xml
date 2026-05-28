@@ -5,7 +5,7 @@
     <!-- Google Play Billing -->
     <uses-permission android:name="com.android.vending.BILLING"/>
     <application
-        android:label="trivia_master"
+        android:label="ידען"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
