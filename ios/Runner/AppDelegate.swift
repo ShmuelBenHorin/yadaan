@@ -15,7 +15,7 @@ import UIKit
 
     // ─── iCloud Key-Value Store channel ─────────────────────────────────────
     let messenger = engineBridge.pluginRegistry
-      .registrar(forPlugin: "ICloudKVPlugin").messenger()
+      .registrar(forPlugin: "ICloudKVPlugin")!.messenger()
     let kvChannel = FlutterMethodChannel(name: "icloud_kv",
                                          binaryMessenger: messenger)
     kvChannel.setMethodCallHandler { call, result in
