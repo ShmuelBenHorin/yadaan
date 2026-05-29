@@ -12,5 +12,29 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+
+    // ─── iCloud Key-Value Store channel ─────────────────────────────────────
+    let messenger = engineBridge.pluginRegistry
+      .registrar(forPlugin: "ICloudKVPlugin").messenger()
+    let kvChannel = FlutterMethodChannel(name: "icloud_kv",
+                                         binaryMessenger: messenger)
+    kvChannel.setMethodCallHandler { call, result in
+      let store = NSUbiquitousKeyValueStore.default
+      switch call.method {
+      case "writeAll":
+        guard let dict = call.arguments as? [String: Any] else {
+          result(FlutterError(code: "BAD_ARGS", message: nil, details: nil))
+          return
+        }
+        for (key, value) in dict { store.set(value, forKey: key) }
+        store.synchronize()
+        result(nil)
+      case "readAll":
+        store.synchronize()
+        result(store.dictionaryRepresentation)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 }

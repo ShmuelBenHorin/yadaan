@@ -632,6 +632,7 @@ class GameState extends ChangeNotifier {
     _t?.cancel();
     if(_stars==Cfg.starsPerLevel)await Sfx.perfect();
     await LevelService.instance.save(diff,levelIdx,_stars);
+    ICloudKV.saveAll(); // גיבוי רקע ל-iCloud
     _phase=Phase.complete;
     notifyListeners();
   }
@@ -649,6 +650,75 @@ class Pal {
   static const premium=Color(0xFFFF9F0A);
   static const tp=Color(0xFFF0F0FF), ts=Color(0xFF8898CC);
   static const starOn=Color(0xFFFFD700), starOff=Color(0xFF2A3A6E);
+}
+
+// ═══════════════════════════════════════════════
+//  ICLOUD KEY-VALUE STORE  (iOS בלבד)
+// ═══════════════════════════════════════════════
+class ICloudKV {
+  static const _ch = MethodChannel('icloud_kv');
+
+  /// שמור את כל ה-SharedPreferences ל-iCloud אחרי סיום שלב
+  static Future<void> saveAll() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      final Map<String, dynamic> data = {};
+
+      // רשימות שאלות שנראו + טעויות
+      for (final key in ['seen_easy','seen_medium','seen_hard','mistakes_v2']) {
+        final v = p.getStringList(key);
+        if (v != null) data[key] = v;
+      }
+      // כוכבים לכל שלב (נפסוק כשאין ערך = 0 מעולם לא הושלם)
+      for (final d in ['easy','medium','hard']) {
+        for (int i = 0; i < 500; i++) {
+          final key = 'lvl_${d}_$i';
+          final v = p.getInt(key);
+          if (v == null) break;
+          data[key] = v;
+        }
+      }
+      // ערכים בודדים
+      for (final key in ['energy','energy_ts','levels_completed']) {
+        final v = p.getInt(key);
+        if (v != null) data[key] = v;
+      }
+      final ob = p.getBool('onboarding_done');
+      if (ob != null) data['onboarding_done'] = ob;
+
+      await _ch.invokeMethod('writeAll', data);
+    } catch (_) {}
+  }
+
+  /// בהפעלה ראשונה אחרי מחיקת האפליקציה — שחזר מ-iCloud אם אין נתונים מקומיים
+  static Future<void> restoreIfEmpty() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      // יש נתונים מקומיים → אין צורך לשחזר
+      if (p.getKeys().any((k) => k.startsWith('lvl_'))) return;
+
+      final raw = await _ch.invokeMapMethod<String, dynamic>('readAll');
+      if (raw == null || raw.isEmpty) return;
+
+      for (final entry in raw.entries) {
+        final key = entry.key;
+        final val = entry.value;
+        if (val is List) {
+          await p.setStringList(key, List<String>.from(val));
+        } else if (val is int) {
+          await p.setInt(key, val);
+        } else if (val is bool) {
+          await p.setBool(key, val);
+        } else if (val is double) {
+          await p.setDouble(key, val);
+        } else if (val is String) {
+          await p.setString(key, val);
+        }
+      }
+    } catch (_) {}
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -672,7 +742,9 @@ void main() async {
   tz_data.initializeTimeZones();
   try { await Firebase.initializeApp(); await Analytics.init(); } catch(e) { debugPrint('Firebase init failed: $e'); }
   await NotificationService.init();
+  await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
+  ICloudKV.saveAll(); // גיבוי ראשוני ל-iCloud — עוזר למשתמשים שמעדכנים מגרסה ישנה
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
     await MobileAds.instance.initialize();
