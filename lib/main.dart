@@ -19,6 +19,8 @@ import 'questions_easy.dart';
 import 'questions_medium.dart';
 import 'questions_hard.dart';
 import 'sfx_stub.dart' if (dart.library.html) 'sfx_web.dart';
+import 'user_stats.dart';
+import 'interests_service.dart';
 // ═══════════════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════════════
@@ -597,6 +599,9 @@ class GameState extends ChangeNotifier {
     await EnergyService.instance.spend(Cfg.energyCostWrong);
     MistakesService.instance.add(cur);
     if(!_failedQs.contains(cur))_failedQs.add(cur);
+    // KD + חולשות
+    UserStatsService.instance.recordAnswer(correct: false, diffIndex: diff.index);
+    InterestsService.instance.recordAnswer(category: cur.category, correct: false);
     _waitingContinue=true; notifyListeners();
   }
   void answer(int idx) async {
@@ -604,6 +609,9 @@ class GameState extends ChangeNotifier {
     final ok=idx==cur.c;
     if(ok){
       await Sfx.correct(); QRepo.markSeen(cur.id,diff);
+      // KD + XP + streak
+      UserStatsService.instance.recordAnswer(correct: true, diffIndex: diff.index);
+      InterestsService.instance.recordAnswer(category: cur.category, correct: true);
       await Future.delayed(const Duration(milliseconds:900));
       _fb=false;_sel=null;
       _queue.removeAt(0); _answeredCorrect++;
@@ -614,6 +622,9 @@ class GameState extends ChangeNotifier {
       await EnergyService.instance.spend(Cfg.energyCostWrong);
       MistakesService.instance.add(cur);
       if(!_failedQs.contains(cur))_failedQs.add(cur);
+      // KD + חולשות
+      UserStatsService.instance.recordAnswer(correct: false, diffIndex: diff.index);
+      InterestsService.instance.recordAnswer(category: cur.category, correct: false);
       _waitingContinue=true; notifyListeners();
     }
   }
@@ -680,9 +691,22 @@ class ICloudKV {
         }
       }
       // ערכים בודדים
-      for (final key in ['energy','energy_ts','levels_completed']) {
+      for (final key in ['energy','energy_ts','levels_completed',
+                         'us_xp','us_correct','us_wrong','us_streak','us_best_str']) {
         final v = p.getInt(key);
         if (v != null) data[key] = v;
+      }
+      // UserStats — תאריך + תחומי עניין
+      final lastDate = p.getString('us_last_date');
+      if (lastDate != null) data['us_last_date'] = lastDate;
+      final interests = p.getStringList('interests_v1');
+      if (interests != null) data['interests_v1'] = interests;
+      // חולשות
+      for (final cat in ['israel','judaism','football','world','geography','science','sports','music','american_music']) {
+        final m = p.getInt('weak_m_$cat');
+        final a = p.getInt('weak_a_$cat');
+        if (m != null) data['weak_m_$cat'] = m;
+        if (a != null) data['weak_a_$cat'] = a;
       }
       final ob = p.getBool('onboarding_done');
       if (ob != null) data['onboarding_done'] = ob;
@@ -744,6 +768,7 @@ void main() async {
   await NotificationService.init();
   await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
+  await UserStatsService.init(); await InterestsService.init();
   ICloudKV.saveAll(); // גיבוי ראשוני ל-iCloud — עוזר למשתמשים שמעדכנים מגרסה ישנה
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
@@ -776,6 +801,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return ListenableBuilder(listenable:PurchaseService.instance,
       builder:(_,__)=>MaterialApp(title:'\u05D9\u05D3\u05E2\u05DF',debugShowCheckedModeBanner:false,
         theme:ThemeData.dark().copyWith(scaffoldBackgroundColor:Pal.bg,useMaterial3:true),
+        routes: {'/home': (_) => const HomeScreen()},
         home:widget.showOnboarding ? const OnboardingScreen() : const HomeScreen()));
   }
 }
@@ -1180,6 +1206,305 @@ class _AdButton extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════
+//  USER STATS STRIP (HomeScreen widget)
+// ═══════════════════════════════════════════════
+class _UserStatsStrip extends StatelessWidget {
+  @override Widget build(BuildContext context) {
+    final us = UserStatsService.instance;
+    final lvl = us.level;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(children: [
+        // ─── Streak ───
+        _StatPill(
+          emoji: '🔥',
+          label: '${us.streak}',
+          sublabel: 'רצף',
+          color: const Color(0xFFFF6B35),
+        ),
+        const SizedBox(width: 8),
+        // ─── KD ───
+        _StatPill(
+          emoji: '🎯',
+          label: us.kdDisplay,
+          sublabel: 'דיוק',
+          color: const Color(0xFF4D96FF),
+        ),
+        const SizedBox(width: 8),
+        // ─── Level + progress bar ───
+        Expanded(child: GestureDetector(
+          onTap: () => Navigator.push(context, _slide(const ProfileScreen())),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: lvl.color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: lvl.color.withOpacity(0.35)),
+            ),
+            child: Row(children: [
+              Text(lvl.emoji, style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 6),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text(lvl.label,
+                    style: TextStyle(color: lvl.color, fontSize: 11, fontWeight: FontWeight.w800)),
+                  const Spacer(),
+                  Text('${us.xp} נק׳',
+                    style: const TextStyle(color: Color(0xFF78909C), fontSize: 10)),
+                ]),
+                const SizedBox(height: 3),
+                ClipRRect(borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: us.levelProgress,
+                    backgroundColor: Colors.white.withOpacity(0.1),
+                    valueColor: AlwaysStoppedAnimation(lvl.color),
+                    minHeight: 4,
+                  )),
+              ])),
+            ]),
+          ),
+        )),
+      ]),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  final String emoji, label, sublabel;
+  final Color color;
+  const _StatPill({required this.emoji, required this.label, required this.sublabel, required this.color});
+  @override Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: color.withOpacity(0.35)),
+    ),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(emoji, style: const TextStyle(fontSize: 14)),
+      const SizedBox(height: 1),
+      Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w900)),
+      Text(sublabel, style: const TextStyle(color: Color(0xFF78909C), fontSize: 9)),
+    ]),
+  );
+}
+
+// ═══════════════════════════════════════════════
+//  PROFILE SCREEN
+// ═══════════════════════════════════════════════
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+  @override State<ProfileScreen> createState() => _ProfileScreenState();
+}
+class _ProfileScreenState extends State<ProfileScreen> {
+  void _openInterests() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _InterestBottomSheet(),
+    );
+  }
+
+  @override Widget build(BuildContext context) {
+    final us  = UserStatsService.instance;
+    final interests = InterestsService.instance;
+    final lvl = us.level;
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D1B3E),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.pop(context)),
+        title: const Text('הפרופיל שלי',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.tune, color: Color(0xFFFFD700)),
+            tooltip: 'שנה תחומי עניין',
+            onPressed: _openInterests),
+        ],
+      ),
+      body: ListenableBuilder(
+        listenable: Listenable.merge([us, InterestsService.instance]),
+        builder: (_, __) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(children: [
+              // ─── Level Card ───────────────────────────
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [lvl.color.withOpacity(0.25), lvl.color.withOpacity(0.05)],
+                    begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: lvl.color.withOpacity(0.5))),
+                child: Column(children: [
+                  Text(lvl.emoji, style: const TextStyle(fontSize: 52)),
+                  const SizedBox(height: 8),
+                  Text(lvl.titleLabel,
+                    style: TextStyle(color: lvl.color, fontSize: 24, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text('${us.xp} נקודות ניסיון',
+                    style: const TextStyle(color: Color(0xFFB0BEC5), fontSize: 14)),
+                  const SizedBox(height: 16),
+                  if (lvl != PlayerLevel.legend) ...[
+                    Row(children: [
+                      Text('${us.xpInLevel}',
+                        style: TextStyle(color: lvl.color, fontSize: 13, fontWeight: FontWeight.w700)),
+                      const Spacer(),
+                      Text('${us.xpForLevel} נקודות',
+                        style: const TextStyle(color: Color(0xFF78909C), fontSize: 12)),
+                    ]),
+                    const SizedBox(height: 6),
+                    ClipRRect(borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: us.levelProgress,
+                        backgroundColor: Colors.white.withOpacity(0.1),
+                        valueColor: AlwaysStoppedAnimation(lvl.color),
+                        minHeight: 10,
+                      )),
+                    const SizedBox(height: 6),
+                    Text('עוד ${us.xpForLevel - us.xpInLevel} נקודות לרמת ${PlayerLevel.values[lvl.index + 1].label}',
+                      style: const TextStyle(color: Color(0xFF78909C), fontSize: 12)),
+                  ],
+                ])),
+              const SizedBox(height: 16),
+              // ─── Stats Grid ───────────────────────────
+              Row(children: [
+                _StatBox(title: 'דיוק תשובות', value: us.kdDisplay, emoji: '🎯',
+                  sub: us.kdRatio, color: const Color(0xFF4D96FF)),
+                const SizedBox(width: 12),
+                _StatBox(title: 'רצף', emoji: '🔥', color: const Color(0xFFFF6B35),
+                  value: us.streak == 1 ? 'יום אחד' : '${us.streak}',
+                  sub:   us.streak == 1 ? 'רצוף' : 'ימים רצופים'),
+              ]),
+              const SizedBox(height: 12),
+              Row(children: [
+                _StatBox(title: 'תשובות נכונות', value: '${us.correct}', emoji: '✅',
+                  sub: 'מתוך ${us.total}', color: const Color(0xFF2ECC71)),
+                const SizedBox(width: 12),
+                _StatBox(title: 'שיא רצף', emoji: '🏆', color: const Color(0xFFFFD700),
+                  value: us.bestStreak == 1 ? 'יום אחד' : '${us.bestStreak}',
+                  sub:   us.bestStreak == 1 ? 'רצוף' : 'ימים'),
+              ]),
+              const SizedBox(height: 20),
+              // ─── Interests ────────────────────────────
+              GestureDetector(
+                onTap: _openInterests,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A2A4A),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.25))),
+                  child: Row(children: [
+                    const Text('⭐', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 8),
+                    const Text('תחומי העניין שלך',
+                      style: TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.w800)),
+                    const Spacer(),
+                    const Icon(Icons.edit_outlined, color: Color(0xFF546E7A), size: 16),
+                  ]),
+                )),
+              const SizedBox(height: 10),
+              if (interests.hasInterests)
+                Wrap(spacing: 8, runSpacing: 8, children: interests.selected.map((key) {
+                  final cat = InterestCat.forKey(key);
+                  if (cat == null) return const SizedBox.shrink();
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: cat.color.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: cat.color.withOpacity(0.5))),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(cat.emoji, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Text(cat.label, style: TextStyle(color: cat.color, fontSize: 13, fontWeight: FontWeight.w700)),
+                    ]));
+                }).toList())
+              else
+                GestureDetector(
+                  onTap: _openInterests,
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0D1728),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF2A3A55))),
+                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Text('+ הוסף תחומי עניין',
+                        style: TextStyle(color: Color(0xFF78909C), fontSize: 13)),
+                    ]))),
+              const SizedBox(height: 16),
+              // ─── Weaknesses ───────────────────────────
+              if (interests.weaknesses.isNotEmpty) ...[
+                Align(alignment: Alignment.centerRight,
+                  child: const Text('📈 תחומים לשיפור',
+                    style: TextStyle(color: Color(0xFFFF7043), fontSize: 15, fontWeight: FontWeight.w800))),
+                const SizedBox(height: 10),
+                Wrap(spacing: 8, runSpacing: 8, children: interests.weaknesses.map((key) {
+                  final cat = InterestCat.forKey(key);
+                  if (cat == null) return const SizedBox.shrink();
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7043).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFFF7043).withOpacity(0.4))),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Text(cat.emoji, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Text(cat.label,
+                        style: const TextStyle(color: Color(0xFFFF7043), fontSize: 13, fontWeight: FontWeight.w700)),
+                    ]));
+                }).toList()),
+              ],
+            ]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StatBox extends StatelessWidget {
+  final String title, value, emoji, sub;
+  final Color color;
+  const _StatBox({required this.title, required this.value, required this.emoji, required this.sub, required this.color});
+  @override Widget build(BuildContext context) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.25))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 6),
+          Flexible(child: Text(title,
+            style: const TextStyle(color: Color(0xFF90A4AE), fontSize: 11, fontWeight: FontWeight.w600))),
+        ]),
+        const SizedBox(height: 8),
+        Text(value, style: TextStyle(color: color, fontSize: 26, fontWeight: FontWeight.w900)),
+        Text(sub, style: const TextStyle(color: Color(0xFF78909C), fontSize: 11)),
+      ]),
+    ),
+  );
+}
+
+// ═══════════════════════════════════════════════
 //  HOME SCREEN
 // ═══════════════════════════════════════════════
 class HomeScreen extends StatefulWidget {
@@ -1192,6 +1517,7 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState(); _bg=AnimationController(vsync:this,duration:const Duration(seconds:8))..repeat(reverse:true);
     LevelService.instance.addListener((){if(mounted)setState((){});});
     PurchaseService.instance.addListener((){if(mounted)setState((){});});
+    UserStatsService.instance.addListener((){if(mounted)setState((){});});
   }
   @override void dispose(){_bg.dispose();super.dispose();}
   @override Widget build(BuildContext context){
@@ -1207,6 +1533,22 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
             ShaderMask(shaderCallback:(b)=>const LinearGradient(colors:[Pal.gold,Color(0xFFFF9F0A)]).createShader(b),
               child:const Text('\u05D9\u05D3\u05E2\u05DF',style:TextStyle(fontSize:36,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:3))),
             const Spacer(),
+            // \u05DB\u05E4\u05EA\u05D5\u05E8 \u05E4\u05E8\u05D5\u05E4\u05D9\u05DC
+            GestureDetector(
+              onTap: () => Navigator.push(context, _slide(const ProfileScreen())),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: UserStatsService.instance.level.color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: UserStatsService.instance.level.color.withOpacity(0.4))),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(UserStatsService.instance.level.emoji, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 3),
+                  Text(UserStatsService.instance.level.label,
+                    style: TextStyle(color: UserStatsService.instance.level.color, fontSize: 11, fontWeight: FontWeight.w700, fontFamily: null)),
+                ]))),
+            const SizedBox(width: 8),
             GestureDetector(
               onTap: () => Navigator.push(context, _slide(const MistakesScreen())),
               child: Container(
@@ -1222,6 +1564,9 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
             const EnergyChip(),
           ])),
         const SizedBox(height:12),
+        // ─── Stats strip (KD + XP level + Streak) ────────────────────────────
+        Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_UserStatsStrip()),
+        const SizedBox(height:10),
         // Stars bar
         Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_StarsBar()),
         const SizedBox(height:24),
@@ -1852,6 +2197,10 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     return leave??false;
   }
   @override Widget build(BuildContext context){
+    // המסך ממשיך להיות בstackbזמן הtransition — לא לגשת לcur כשהqueue ריק
+    if (_gs.phase != Phase.playing || _exiting) {
+      return const Scaffold(backgroundColor: Pal.bg, body: SizedBox.shrink());
+    }
     final q=_gs.cur;
     return WillPopScope(onWillPop:_quit,
       child:Scaffold(backgroundColor:Pal.bg,body:Stack(children:[
@@ -2047,6 +2396,153 @@ class _QuitDlg extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════
+//  INTERESTS BOTTOM SHEET (מינימלי)
+// ═══════════════════════════════════════════════
+class _InfoRow extends StatelessWidget {
+  final String emoji, text;
+  const _InfoRow({required this.emoji, required this.text});
+  @override Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(emoji, style: const TextStyle(fontSize: 13)),
+      const SizedBox(width: 8),
+      Expanded(child: Text(text, textDirection: TextDirection.rtl,
+        style: const TextStyle(color: Color(0xFF90A4AE), fontSize: 12, height: 1.4))),
+    ],
+  );
+}
+
+class _InterestBottomSheet extends StatefulWidget {
+  const _InterestBottomSheet();
+  @override State<_InterestBottomSheet> createState() => _IBSState();
+}
+class _IBSState extends State<_InterestBottomSheet> {
+  final Set<String> _sel = {};
+  bool _expanded = false;
+
+  @override Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF111E35),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        // Handle
+        Container(width: 36, height: 4,
+          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 18),
+        const Text('מה מעניין אותך?', textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        // ─── הסבר + קרא עוד ───────────────────────────────────────────────
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Column(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A2A40),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF2A3A55)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Text('רוב השאלות יהיו ממה שבחרת',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 12)),
+                const SizedBox(width: 6),
+                AnimatedCrossFade(
+                  firstChild: const Text('קרא עוד',
+                    style: TextStyle(color: Color(0xFF4D96FF), fontSize: 12, fontWeight: FontWeight.w700)),
+                  secondChild: const Text('סגור',
+                    style: TextStyle(color: Color(0xFF4D96FF), fontSize: 12, fontWeight: FontWeight.w700)),
+                  crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 150)),
+              ]),
+            ),
+            AnimatedCrossFade(
+              firstChild: const SizedBox.shrink(),
+              secondChild: Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0D1728),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF1E2D45))),
+                child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _InfoRow(emoji: '🎯', text: 'שאלות מהתחומים שבחרת: כ-70% מהזמן'),
+                  SizedBox(height: 6),
+                  _InfoRow(emoji: '🔀', text: 'שאלות מגוונות מכל הנושאים: כ-30% — כדי לשמור על האתגר'),
+                  SizedBox(height: 6),
+                  _InfoRow(emoji: '🔓', text: 'אף נושא לא נחסם לחלוטין'),
+                  SizedBox(height: 6),
+                  _InfoRow(emoji: '📈', text: 'המערכת מזהה נושאים שקשים לך ומשלבת אותם בהדרגה — לא כענישה, אלא כדי לעזור לך להשתפר'),
+                ]),
+              ),
+              crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 200),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 8, runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: InterestCat.all.map((cat) {
+            final on = _sel.contains(cat.key);
+            return GestureDetector(
+              onTap: () => setState(() {
+                if (on) _sel.remove(cat.key); else _sel.add(cat.key);
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: on ? cat.color.withOpacity(0.2) : const Color(0xFF1E2D45),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: on ? cat.color : const Color(0xFF2A3A55), width: 1.5),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(cat.emoji, style: const TextStyle(fontSize: 14)),
+                  const SizedBox(width: 5),
+                  Text(cat.label,
+                    style: TextStyle(
+                      color: on ? Colors.white : const Color(0xFF78909C),
+                      fontSize: 12, fontWeight: on ? FontWeight.w700 : FontWeight.w500)),
+                ]),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+        Row(children: [
+          Expanded(child: TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('דלג', style: TextStyle(color: Color(0xFF546E7A), fontSize: 14)),
+          )),
+          const SizedBox(width: 8),
+          Expanded(flex: 2, child: ElevatedButton(
+            onPressed: _sel.isEmpty ? null : _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFFD700),
+              foregroundColor: Colors.black,
+              disabledBackgroundColor: const Color(0xFF1E2D45),
+              padding: const EdgeInsets.symmetric(vertical: 13),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text('שמור ✓', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          )),
+        ]),
+      ]),
+    );
+  }
+
+  Future<void> _save() async {
+    await InterestsService.instance.setInterests(_sel);
+    if (mounted) Navigator.pop(context);
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  COMPLETE SCREEN
 // ═══════════════════════════════════════════════
 class CompleteScreen extends StatefulWidget {
@@ -2098,7 +2594,22 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
         _levelUpCtrl.forward();
       }
     });
-    _maybeRequestReview();
+    // אחרי השלב הראשון — הצג בחירת תחומי עניין, ורק אחריה review
+    _maybeShowInterests().then((_) => _maybeRequestReview());
+  }
+
+  Future<void> _maybeShowInterests() async {
+    if (InterestsService.instance.hasInterests) return;
+    await Future.delayed(const Duration(milliseconds: 1800));
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (_) => const _InterestBottomSheet(),
+    );
   }
 
   Future<void> _maybeRequestReview() async {
@@ -2277,7 +2788,24 @@ class FailedScreen extends StatefulWidget {
 }
 class _FS extends State<FailedScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
-  @override void initState(){super.initState();_c=AnimationController(vsync:this,duration:const Duration(milliseconds:600))..forward();}
+  @override void initState(){
+    super.initState();
+    _c=AnimationController(vsync:this,duration:const Duration(milliseconds:600))..forward();
+    _maybeShowInterests();
+  }
+  Future<void> _maybeShowInterests() async {
+    if (InterestsService.instance.hasInterests) return;
+    await Future.delayed(const Duration(milliseconds: 1400));
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (_) => const _InterestBottomSheet(),
+    );
+  }
   @override void dispose(){_c.dispose();super.dispose();}
   @override Widget build(BuildContext context){
     return Scaffold(backgroundColor:Pal.bg,body:Stack(children:[
@@ -2548,42 +3076,79 @@ class _PS extends State<PaywallSheet>{
   @override void dispose(){PurchaseService.instance.removeListener(_rebuild);super.dispose();}
   @override Widget build(BuildContext context){
     final ps=PurchaseService.instance;
+    final bot=MediaQuery.of(context).padding.bottom;
     return Container(
-      height:MediaQuery.of(context).size.height*0.85,
-      decoration:const BoxDecoration(color:Color(0xFF0A1128),borderRadius:BorderRadius.vertical(top:Radius.circular(28))),
+      height:MediaQuery.of(context).size.height*0.88,
+      decoration:const BoxDecoration(
+        color:Color(0xFF080F1E),
+        borderRadius:BorderRadius.vertical(top:Radius.circular(28))),
       child:Column(children:[
-        Container(margin:const EdgeInsets.only(top:12),width:40,height:4,decoration:BoxDecoration(color:Pal.ts.withOpacity(0.4),borderRadius:BorderRadius.circular(2))),
-        Expanded(child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(24,20,24,0),child:Column(children:[
-          Container(width:76,height:76,
-            decoration:BoxDecoration(shape:BoxShape.circle,
-              gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
-              boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.6),blurRadius:24)]),
-            child:const Center(child:Text('👑',style:TextStyle(fontSize:38)))),
-          const SizedBox(height:16),
-          const Text('ידען פרו',style:TextStyle(color:Pal.tp,fontSize:28,fontWeight:FontWeight.w900)),
-          const SizedBox(height:6),
-          const Text('לחודש 12.90 ₪',textDirection:TextDirection.rtl,style:TextStyle(color:Pal.premium,fontSize:18,fontWeight:FontWeight.w700)),
-          const SizedBox(height:24),
-          _bf('🔴','שלבים קשים פתוחים'),
-          _bf('🧠','טעינה של 50 מוחות מיידית'),
-          _bf('🔄','טעינה של פי שלוש כל פעם'),
-          _bf('🚫','ללא פרסומות'),
-          _bf('🔓','גישה לכל התכנים העתידיים'),
-          const SizedBox(height:24),
-          const SizedBox(height:20),
-        ]))),
-        Padding(padding:EdgeInsets.fromLTRB(24,0,24,MediaQuery.of(context).padding.bottom+16),
+        // handle
+        Container(margin:const EdgeInsets.only(top:12),width:40,height:4,
+          decoration:BoxDecoration(color:Colors.white12,borderRadius:BorderRadius.circular(2))),
+        Expanded(child:SingleChildScrollView(
+          padding:const EdgeInsets.fromLTRB(24,24,24,0),
+          child:Column(children:[
+            // ── Crown ──────────────────────────────────────────────────────
+            Container(width:80,height:80,
+              decoration:BoxDecoration(shape:BoxShape.circle,
+                gradient:const LinearGradient(
+                  colors:[Color(0xFFFFD700),Color(0xFFFF9F0A)],
+                  begin:Alignment.topLeft,end:Alignment.bottomRight),
+                boxShadow:[BoxShadow(color:const Color(0xFFFFD700).withOpacity(0.4),blurRadius:28,spreadRadius:2)]),
+              child:const Center(child:Text('👑',style:TextStyle(fontSize:40)))),
+            const SizedBox(height:18),
+            // ── Title ──────────────────────────────────────────────────────
+            const Text('ידען פרו',
+              style:TextStyle(color:Colors.white,fontSize:30,fontWeight:FontWeight.w900,letterSpacing:1)),
+            const SizedBox(height:6),
+            ShaderMask(
+              shaderCallback:(b)=>const LinearGradient(
+                colors:[Color(0xFFFFD700),Color(0xFFFF9F0A)]).createShader(b),
+              child:const Text('שחק ללא גבולות',
+                style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w600))),
+            const SizedBox(height:28),
+            // ── Benefits ───────────────────────────────────────────────────
+            _PBenefit(emoji:'🔴',title:'שלבים קשים — פתוחים',sub:'גישה לכל רמות הקושי'),
+            const SizedBox(height:10),
+            _PBenefit(emoji:'🧠',title:'50 מוחות מיידית',sub:'במקום 15 — כמעט פי 4'),
+            const SizedBox(height:10),
+            _PBenefit(emoji:'⚡',title:'טעינה מהירה פי 3',sub:'חזרה למשחק מהר יותר'),
+            const SizedBox(height:10),
+            _PBenefit(emoji:'🚫',title:'ללא פרסומות',sub:'חוויה נקייה ורציפה'),
+            const SizedBox(height:10),
+            _PBenefit(emoji:'🔓',title:'כל התכנים העתידיים',sub:'עדכונים, קטגוריות וניחוש מיוחדים'),
+            const SizedBox(height:28),
+            // ── Price badge ────────────────────────────────────────────────
+            Container(
+              width:double.infinity,
+              padding:const EdgeInsets.symmetric(vertical:12),
+              decoration:BoxDecoration(
+                color:const Color(0xFFFFD700).withOpacity(0.08),
+                borderRadius:BorderRadius.circular(14),
+                border:Border.all(color:const Color(0xFFFFD700).withOpacity(0.25))),
+              child:const Column(children:[
+                Text('12.90 ₪ לחודש בלבד',textAlign:TextAlign.center,
+                  textDirection:TextDirection.rtl,
+                  style:TextStyle(color:Color(0xFFFFD700),fontSize:16,fontWeight:FontWeight.w800)),
+                SizedBox(height:2),
+                Text('ביטול בכל עת',textAlign:TextAlign.center,
+                  style:TextStyle(color:Color(0xFF78909C),fontSize:12)),
+              ])),
+            const SizedBox(height:20),
+          ]))),
+        // ── Bottom bar ─────────────────────────────────────────────────────
+        Padding(padding:EdgeInsets.fromLTRB(24,0,24,bot+16),
           child:Column(children:[
             if(_errMsg!=null)Padding(padding:const EdgeInsets.only(bottom:10),
               child:Text(_errMsg!,textAlign:TextAlign.center,
                 style:const TextStyle(color:Pal.red,fontSize:13))),
             if(ps.isLoading)
-              const Padding(padding:EdgeInsets.symmetric(vertical:12),
-                child:CircularProgressIndicator(color:Pal.premium))
+              const Padding(padding:EdgeInsets.symmetric(vertical:14),
+                child:CircularProgressIndicator(color:Color(0xFFFFD700)))
             else GestureDetector(
               onTap:()async{
                 setState(()=>_errMsg=null);
-                // reload only if packages not yet loaded
                 if(ps.packages.isEmpty) await ps.loadOfferings();
                 if(!mounted)return;
                 if(ps.packages.isEmpty){
@@ -2593,7 +3158,7 @@ class _PS extends State<PaywallSheet>{
                 try{
                   final ok=await ps.purchase(ps.packages.first);
                   if(!mounted)return;
-                  if(ok) Navigator.pop(context);
+                  if(ok)Navigator.pop(context);
                 }on PurchasesError catch(e){
                   if(!mounted)return;
                   setState(()=>_errMsg='שגיאת רכישה: ${e.message}');
@@ -2603,16 +3168,17 @@ class _PS extends State<PaywallSheet>{
                 }
               },
               child:Container(width:double.infinity,
-                padding:const EdgeInsets.symmetric(vertical:18),
+                padding:const EdgeInsets.symmetric(vertical:17),
                 decoration:BoxDecoration(
-                  gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
+                  gradient:const LinearGradient(
+                    colors:[Color(0xFFFFD700),Color(0xFFFF9F0A)],
+                    begin:Alignment.topLeft,end:Alignment.bottomRight),
                   borderRadius:BorderRadius.circular(18),
-                  boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.5),blurRadius:16,offset:const Offset(0,4))]),
+                  boxShadow:[BoxShadow(color:const Color(0xFFFFD700).withOpacity(0.35),blurRadius:18,offset:const Offset(0,4))]),
                 child:const Text('התחל עכשיו — ‏12.90 ₪ לחודש',
-                  textAlign:TextAlign.center,
-                  textDirection:TextDirection.rtl,
-                  style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w900)))),
-            const SizedBox(height:10),
+                  textAlign:TextAlign.center,textDirection:TextDirection.rtl,
+                  style:TextStyle(color:Colors.black,fontSize:16,fontWeight:FontWeight.w900)))),
+            const SizedBox(height:12),
             GestureDetector(
               onTap:()async{
                 final ok=await ps.restore();
@@ -2622,7 +3188,8 @@ class _PS extends State<PaywallSheet>{
                     const SnackBar(content:Text('✅ הרכישה שוחזרה!'),backgroundColor:Pal.green));
                 }
               },
-              child:const Text('שחזר רכישות',style:TextStyle(color:Pal.ts,fontSize:13,decoration:TextDecoration.underline))),
+              child:const Text('שחזר רכישות',
+                style:TextStyle(color:Color(0xFF546E7A),fontSize:13,decoration:TextDecoration.underline))),
             const SizedBox(height:16),
             Text(
               defaultTargetPlatform==TargetPlatform.iOS
@@ -2646,13 +3213,30 @@ class _PS extends State<PaywallSheet>{
           ])),
       ]));
   }
-  Widget _bf(String e,String t)=>Padding(
-    padding:const EdgeInsets.only(bottom:14),
-    child:Directionality(textDirection:TextDirection.rtl,child:Row(children:[
-      Text(e,style:const TextStyle(fontSize:20)),
-      const SizedBox(width:14),
-      Expanded(child:Text(t,textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w600))),
-    ])));
+}
+
+class _PBenefit extends StatelessWidget {
+  final String emoji, title, sub;
+  const _PBenefit({required this.emoji, required this.title, required this.sub});
+  @override Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFF0E1A2E),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: Colors.white.withOpacity(0.06))),
+    child: Row(children: [
+      Text(emoji, style: const TextStyle(fontSize: 22)),
+      const SizedBox(width: 14),
+      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, textDirection: TextDirection.rtl,
+          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 2),
+        Text(sub, textDirection: TextDirection.rtl,
+          style: const TextStyle(color: Color(0xFF78909C), fontSize: 12)),
+      ])),
+      const Icon(Icons.check_circle_rounded, color: Color(0xFF2ECC71), size: 18),
+    ]),
+  );
 }
 
 
@@ -2810,6 +3394,9 @@ class _CQState extends State<CategoryQuizScreen> with TickerProviderStateMixin {
     final ok = idx == _cur.c;
     if (ok) {
       await Sfx.correct();
+      // KD + XP
+      UserStatsService.instance.recordAnswer(correct: true, diffIndex: _cur.diff.index);
+      InterestsService.instance.recordAnswer(category: _cur.category, correct: true);
       setState(() {
         _score += 10 + _cur.diff.index*5 + _streak*2;
         _correct++; _streak++;
@@ -2817,6 +3404,9 @@ class _CQState extends State<CategoryQuizScreen> with TickerProviderStateMixin {
       });
     } else {
       await Sfx.wrong();
+      // KD + חולשות
+      UserStatsService.instance.recordAnswer(correct: false, diffIndex: _cur.diff.index);
+      InterestsService.instance.recordAnswer(category: _cur.category, correct: false);
       // אנרגיה יורדת בשקט — ללא פופאפ, ללא אישור
       await EnergyService.instance.spend(Cfg.energyCostWrong);
       _shakeCtrl.forward(from:0);
