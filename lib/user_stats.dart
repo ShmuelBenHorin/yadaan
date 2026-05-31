@@ -120,8 +120,15 @@ class UserStatsService extends ChangeNotifier {
   }
 
   void _onLevelUp(PlayerLevel newLevel) {
-    // callback חיצוני יכול להאזין — אפשר להוסיף אנימציה/dialog בהמשך
-    debugPrint('⬆️ Level up! → ${newLevel.label}');
+    // Analytics נקרא מ-main.dart כי user_stats לא מייבא אותו
+    _pendingLevelUp = newLevel;
+  }
+
+  PlayerLevel? _pendingLevelUp;
+  PlayerLevel? consumeLevelUp() {
+    final v = _pendingLevelUp;
+    _pendingLevelUp = null;
+    return v;
   }
 
   // ─── Helpers ─────────────────────────────────

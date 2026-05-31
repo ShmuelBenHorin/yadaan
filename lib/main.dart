@@ -18,9 +18,12 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'questions_easy.dart';
 import 'questions_medium.dart';
 import 'questions_hard.dart';
+import 'questions_bagrut.dart';
 import 'sfx_stub.dart' if (dart.library.html) 'sfx_web.dart';
 import 'user_stats.dart';
 import 'interests_service.dart';
+
+part 'bagrut_screen.dart';
 // ═══════════════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════════════
@@ -138,6 +141,62 @@ class Analytics {
   static Future<void> sessionEnded() async {
     try { await _fa?.logEvent(name:'session_ended',
       parameters:{'stages_played':_sessionStages,'energy_remaining':EnergyService.instance.energy}); } catch(_){}
+  }
+
+  // ─── רמות שחקן ───────────────────────────────────────────────────────────
+  /// נקרא כשמשתמש עולה רמה
+  static Future<void> playerLevelUp({required String newLevel, required int xp}) async {
+    try { await _fa?.logEvent(name:'player_level_up',
+      parameters:{'new_level':newLevel,'total_xp':xp}); } catch(_){}
+  }
+
+  /// streak — רצף ימים
+  static Future<void> streakMilestone(int days) async {
+    try { await _fa?.logEvent(name:'streak_milestone',
+      parameters:{'days':days}); } catch(_){}
+  }
+
+  /// KD — דיוק
+  static Future<void> kdMilestone(String pct) async {
+    // pct: '50%' | '75%' | '90%' | '100%'
+    try { await _fa?.logEvent(name:'kd_milestone',
+      parameters:{'accuracy':pct}); } catch(_){}
+  }
+
+  // ─── תחומי עניין ──────────────────────────────────────────────────────────
+  /// המשתמש בחר תחומי עניין (אחרי שלב ראשון)
+  static Future<void> interestsSelected({required List<String> categories}) async {
+    try { await _fa?.logEvent(name:'interests_selected',
+      parameters:{'count':categories.length,'categories':categories.join(',')}); } catch(_){}
+  }
+
+  /// המשתמש דילג על בחירת תחומי עניין
+  static Future<void> interestsSkipped() async {
+    try { await _fa?.logEvent(name:'interests_skipped'); } catch(_){}
+  }
+
+  /// המשתמש שינה תחומי עניין מהפרופיל
+  static Future<void> interestsChanged({required List<String> categories}) async {
+    try { await _fa?.logEvent(name:'interests_changed',
+      parameters:{'count':categories.length,'categories':categories.join(',')}); } catch(_){}
+  }
+
+  // ─── פרופיל ───────────────────────────────────────────────────────────────
+  /// פתיחת מסך פרופיל
+  static Future<void> profileOpened() async {
+    try { await _fa?.logEvent(name:'profile_opened',
+      parameters:{
+        'level': UserStatsService.instance.level.label,
+        'xp':    UserStatsService.instance.xp,
+        'streak':UserStatsService.instance.streak,
+      }); } catch(_){}
+  }
+
+  // ─── retention ────────────────────────────────────────────────────────────
+  /// כניסה יומית (נקרא בעת הפעלת האפליקציה)
+  static Future<void> dailyOpen({required int streak}) async {
+    try { await _fa?.logEvent(name:'daily_open',
+      parameters:{'streak':streak}); } catch(_){}
   }
 }
 
@@ -610,8 +669,17 @@ class GameState extends ChangeNotifier {
     if(ok){
       await Sfx.correct(); QRepo.markSeen(cur.id,diff);
       // KD + XP + streak
-      UserStatsService.instance.recordAnswer(correct: true, diffIndex: diff.index);
+      await UserStatsService.instance.recordAnswer(correct: true, diffIndex: diff.index);
       InterestsService.instance.recordAnswer(category: cur.category, correct: true);
+      // level up event
+      final lu = UserStatsService.instance.consumeLevelUp();
+      if (lu != null) Analytics.playerLevelUp(newLevel: lu.label, xp: UserStatsService.instance.xp);
+      // streak milestones
+      final st = UserStatsService.instance.streak;
+      if ([3,7,14,30,60,100].contains(st)) Analytics.streakMilestone(st);
+      // KD milestones
+      final kd = UserStatsService.instance.kd;
+      if (kd >= 0.9 && UserStatsService.instance.total % 10 == 0) Analytics.kdMilestone('90%+');
       await Future.delayed(const Duration(milliseconds:900));
       _fb=false;_sel=null;
       _queue.removeAt(0); _answeredCorrect++;
@@ -768,7 +836,9 @@ void main() async {
   await NotificationService.init();
   await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
-  await UserStatsService.init(); await InterestsService.init();
+  await UserStatsService.init(); await InterestsService.init(); await BagrutService.init();
+  // כניסה יומית
+  Analytics.dailyOpen(streak: UserStatsService.instance.streak);
   ICloudKV.saveAll(); // גיבוי ראשוני ל-iCloud — עוזר למשתמשים שמעדכנים מגרסה ישנה
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
@@ -1302,6 +1372,11 @@ class ProfileScreen extends StatefulWidget {
   @override State<ProfileScreen> createState() => _ProfileScreenState();
 }
 class _ProfileScreenState extends State<ProfileScreen> {
+  @override void initState() {
+    super.initState();
+    Analytics.profileOpened();
+  }
+
   void _openInterests() {
     showModalBottomSheet(
       context: context,
@@ -1513,13 +1588,70 @@ class HomeScreen extends StatefulWidget {
 }
 class _HS extends State<HomeScreen> with TickerProviderStateMixin {
   late final AnimationController _bg;
+  // ─── secret logo tap ─────────────────────────────────────────────────────
+  int _logoTaps = 0;
+  Timer? _tapReset;
+
+  void _onLogoTap() {
+    _tapReset?.cancel();
+    _logoTaps++;
+    if (_logoTaps >= 7) {
+      _logoTaps = 0;
+      _showSecretDialog();
+    } else {
+      _tapReset = Timer(const Duration(seconds: 3), () => _logoTaps = 0);
+    }
+  }
+
+  void _showSecretDialog() {
+    final ctrl = TextEditingController();
+    showDialog(context: context, builder: (_) => AlertDialog(
+      backgroundColor: const Color(0xFF0F2044),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('🔐', textAlign: TextAlign.center, style: TextStyle(fontSize: 32)),
+      content: TextField(
+        controller: ctrl,
+        obscureText: true,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Colors.white, letterSpacing: 4),
+        decoration: InputDecoration(
+          hintText: 'קוד גישה',
+          hintStyle: const TextStyle(color: Color(0xFF7A90C0)),
+          filled: true, fillColor: const Color(0xFF152856),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)),
+        onSubmitted: (_) => _tryCode(ctrl.text),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('ביטול', style: TextStyle(color: Color(0xFF7A90C0)))),
+        ElevatedButton(
+          onPressed: () => _tryCode(ctrl.text),
+          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black),
+          child: const Text('אישור', style: TextStyle(fontWeight: FontWeight.w800))),
+      ],
+    ));
+  }
+
+  void _tryCode(String code) {
+    Navigator.pop(context);
+    if (code == Cfg.devCode) {
+      BagrutService.instance.unlockDev();
+      PurchaseService.instance.tryDev(code);
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ גישה הופעלה'), backgroundColor: Color(0xFF2ECC71)));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('קוד שגוי'), backgroundColor: Color(0xFFE74C3C)));
+    }
+  }
+
   @override void initState(){
     super.initState(); _bg=AnimationController(vsync:this,duration:const Duration(seconds:8))..repeat(reverse:true);
     LevelService.instance.addListener((){if(mounted)setState((){});});
     PurchaseService.instance.addListener((){if(mounted)setState((){});});
     UserStatsService.instance.addListener((){if(mounted)setState((){});});
   }
-  @override void dispose(){_bg.dispose();super.dispose();}
+  @override void dispose(){_bg.dispose();_tapReset?.cancel();super.dispose();}
   @override Widget build(BuildContext context){
     return Scaffold(body:Stack(children:[
       AnimatedBuilder(animation:_bg,builder:(_,__)=>Container(decoration:BoxDecoration(gradient:LinearGradient(
@@ -1530,8 +1662,10 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
         // Top bar
         Padding(padding:const EdgeInsets.fromLTRB(20,16,20,0),
           child:Row(children:[
-            ShaderMask(shaderCallback:(b)=>const LinearGradient(colors:[Pal.gold,Color(0xFFFF9F0A)]).createShader(b),
-              child:const Text('\u05D9\u05D3\u05E2\u05DF',style:TextStyle(fontSize:36,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:3))),
+            GestureDetector(
+              onTap: _onLogoTap,
+              child:ShaderMask(shaderCallback:(b)=>const LinearGradient(colors:[Pal.gold,Color(0xFFFF9F0A)]).createShader(b),
+                child:const Text('\u05D9\u05D3\u05E2\u05DF',style:TextStyle(fontSize:36,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:3)))),
             const Spacer(),
             // \u05DB\u05E4\u05EA\u05D5\u05E8 \u05E4\u05E8\u05D5\u05E4\u05D9\u05DC
             GestureDetector(
@@ -1566,6 +1700,9 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height:12),
         // ─── Stats strip (KD + XP level + Streak) ────────────────────────────
         Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_UserStatsStrip()),
+        const SizedBox(height:10),
+        // ─── Bagrut teaser ───────────────────────────────────────────────────
+        Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_BagrutTeaser(anim:_bg)),
         const SizedBox(height:10),
         // Stars bar
         Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_StarsBar()),
@@ -1618,7 +1755,7 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
                   child:const Column(children:[
                     Text('👑  רכוש פרו',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900)),
                     SizedBox(height:4),
-                    Text('יותר מוחות · טעינה מהירה · ללא פרסומות',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
+                    Text('יותר מוחות · ללא פרסומות · בגרות בהיסטוריה',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
                   ])))),
           const SizedBox(height:24),
         ]))),
@@ -1696,6 +1833,47 @@ class _HomeCats {
     ('world','תרבות עולמית','🎬',Color(0xFFE67E22)),
     ('american_music','מוזיקה אמריקאית','🎸',Color(0xFFD35400)),
   ];
+}
+
+// ─── Bagrut teaser banner ────────────────────────────────────────────────────
+class _BagrutTeaser extends StatelessWidget {
+  final AnimationController anim;
+  const _BagrutTeaser({required this.anim});
+
+  void _open(BuildContext ctx) {
+    final allowed = PurchaseService.instance.isPremium || BagrutService.instance.devUnlocked;
+    if (!allowed) { Navigator.push(ctx, MaterialPageRoute(builder:(_)=>const BagrutPaywallScreen())); return; }
+    final svc = BagrutService.instance;
+    Navigator.push(ctx, MaterialPageRoute(builder:(_)=>svc.isConfigured ? const BagrutMainScreen() : const BagrutTrackSelectionScreen()));
+  }
+
+  @override
+  Widget build(BuildContext ctx) => AnimatedBuilder(
+    animation: anim,
+    builder: (_,__) {
+      final glow = 0.2 + anim.value * 0.3;
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: GestureDetector(
+          onTap: () => _open(ctx),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F2044),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Pal.gold.withOpacity(glow), width: 1.2),
+              boxShadow: [BoxShadow(color: Pal.gold.withOpacity(glow * 0.3), blurRadius: 10)]),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('📜', style: const TextStyle(fontSize: 13)),
+              const SizedBox(width: 6),
+              const Text('בגרות בהיסטוריה',
+                style: TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.w800)),
+            ]),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _StarsBar extends StatelessWidget {
@@ -2516,7 +2694,7 @@ class _IBSState extends State<_InterestBottomSheet> {
         const SizedBox(height: 20),
         Row(children: [
           Expanded(child: TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () { Analytics.interestsSkipped(); Navigator.pop(context); },
             child: const Text('דלג', style: TextStyle(color: Color(0xFF546E7A), fontSize: 14)),
           )),
           const SizedBox(width: 8),
@@ -2537,7 +2715,13 @@ class _IBSState extends State<_InterestBottomSheet> {
   }
 
   Future<void> _save() async {
+    final isFirst = !InterestsService.instance.hasInterests;
     await InterestsService.instance.setInterests(_sel);
+    if (isFirst) {
+      Analytics.interestsSelected(categories: _sel.toList());
+    } else {
+      Analytics.interestsChanged(categories: _sel.toList());
+    }
     if (mounted) Navigator.pop(context);
   }
 }
@@ -3116,6 +3300,8 @@ class _PS extends State<PaywallSheet>{
             _PBenefit(emoji:'⚡',title:'טעינה מהירה פי 3',sub:'חזרה למשחק מהר יותר'),
             const SizedBox(height:10),
             _PBenefit(emoji:'🚫',title:'ללא פרסומות',sub:'חוויה נקייה ורציפה'),
+            const SizedBox(height:10),
+            _PBenefit(emoji:'📜',title:'בגרות בהיסטוריה',sub:'תרגול חכם לפי חולשות וחוזקות אישיות'),
             const SizedBox(height:10),
             _PBenefit(emoji:'🔓',title:'כל התכנים העתידיים',sub:'עדכונים, קטגוריות וניחוש מיוחדים'),
             const SizedBox(height:28),
