@@ -563,6 +563,7 @@ class PurchaseService extends ChangeNotifier {
         defaultTargetPlatform==TargetPlatform.iOS?Cfg.rciOS:Cfg.rcAndroid));
       final ci=await Purchases.getCustomerInfo();
       _i._pro=ci.entitlements.all[Cfg.entitlement]?.isActive??false;
+      if(_i._pro){EnergyService.instance._e=EnergyService.instance.maxE;EnergyService.instance.notifyListeners();}
       _i.notifyListeners();
     }catch(e){debugPrint('RC:$e');}
   }
@@ -764,6 +765,19 @@ class GameState extends ChangeNotifier {
 // ═══════════════════════════════════════════════
 //  PALETTE
 // ═══════════════════════════════════════════════
+// ─── Energy Overlay flag (נטען sync בפתיחה) ────────────────────────────────
+class _EnergyOverlay {
+  static bool seen = false;
+  static Future<void> init() async {
+    final p = await SharedPreferences.getInstance();
+    seen = p.getBool('energy_overlay_seen') ?? false;
+  }
+  static void markSeen() {
+    seen = true;
+    SharedPreferences.getInstance().then((p) => p.setBool('energy_overlay_seen', true));
+  }
+}
+
 class Pal {
   static const bg=Color(0xFF0D1B3E), bgD=Color(0xFF060D20);
   static const card=Color(0xFF112054), cardL=Color(0xFF1A2E6E);
@@ -879,7 +893,7 @@ void main() async {
   await NotificationService.init();
   await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
-  await UserStatsService.init(); await InterestsService.init(); await BagrutService.init();
+  await UserStatsService.init(); await InterestsService.init(); await BagrutService.init(); await _EnergyOverlay.init();
   if (defaultTargetPlatform == TargetPlatform.android) await CloudSyncService.init();
   // כניסה יומית
   Analytics.dailyOpen(streak: UserStatsService.instance.streak);
@@ -1442,13 +1456,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
           onPressed: () => Navigator.pop(context)),
-        title: const Text('הפרופיל שלי',
+        title: const Text('הגדרות',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
         actions: [
           IconButton(
             icon: const Icon(Icons.tune, color: Color(0xFFFFD700)),
-            tooltip: 'שנה תחומי עניין',
+            tooltip: 'קטגוריות מועדפות',
             onPressed: _openInterests),
+          IconButton(
+            icon: const Icon(Icons.close, color: Pal.ts),
+            onPressed: () => Navigator.push(context, _slide(const MistakesScreen()))),
         ],
       ),
       body: ListenableBuilder(
@@ -1589,12 +1606,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ]));
                 }).toList()),
               ],
-            ]),
-          );
+              const SizedBox(height: 24),
+              // ─── הגדרות נוספות ─────────────────────────
+              const Align(alignment: Alignment.centerRight,
+                child: Text('⚙️  כלים נוספים',
+                  style: TextStyle(color: Pal.ts, fontSize: 13, fontWeight: FontWeight.w700))),
+              const SizedBox(height: 10),
+              _SettingsRow(icon: Icons.close, color: Pal.red, label: 'שגיאות אחרונות',
+                onTap: () => Navigator.push(context, _slide(const MistakesScreen()))),
+              const SizedBox(height: 8),
+              if (defaultTargetPlatform == TargetPlatform.android)
+                _SettingsRow(icon: Icons.cloud_upload_outlined, color: const Color(0xFF4D96FF),
+                  label: CloudSyncService.instance.isSignedIn ? 'סנכרון ענן — מחובר' : 'שמור התקדמות בענן',
+                  onTap: () {}),
+              if (defaultTargetPlatform == TargetPlatform.android)
+                const SizedBox(height: 8),
+              _SettingsRow(icon: Icons.tune, color: Pal.gold, label: 'קטגוריות מועדפות',
+                onTap: _openInterests),
+              const SizedBox(height: 8),
+              _SettingsRow(icon: Icons.star_outline_rounded, color: const Color(0xFFFFD700), label: 'דרג אותנו ⭐',
+                onTap: () async {
+                  final review = InAppReview.instance;
+                  if (await review.isAvailable()) await review.requestReview();
+                  else await review.openStoreListing();
+                }),
+              const SizedBox(height: 24),
+            ]));
         },
       ),
     );
   }
+}
+
+class _SettingsRow extends StatelessWidget {
+  final IconData icon; final Color color; final String label; final VoidCallback onTap;
+  const _SettingsRow({required this.icon, required this.color, required this.label, required this.onTap});
+  @override Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF112054),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.06))),
+      child: Row(children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: const TextStyle(color: Pal.tp, fontSize: 14, fontWeight: FontWeight.w600))),
+        const Icon(Icons.arrow_back_ios_new_rounded, color: Pal.ts, size: 13),
+      ])));
 }
 
 class _StatBox extends StatelessWidget {
@@ -1708,6 +1768,8 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (_) => const InterestsFeatureAnnouncementScreen()));
   }
   @override void dispose(){_bg.dispose();_tapReset?.cancel();super.dispose();}
+  bool _catsExpanded = false;
+
   @override Widget build(BuildContext context){
     return Scaffold(body:Stack(children:[
       AnimatedBuilder(animation:_bg,builder:(_,__)=>Container(decoration:BoxDecoration(gradient:LinearGradient(
@@ -1715,115 +1777,158 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
         colors:[Color.lerp(const Color(0xFF0D1B3E),const Color(0xFF1A0D3E),_bg.value)!,Pal.bgD])))),
       const StarField(),
       SafeArea(child:Column(children:[
-        // Top bar
+        // על בר (מינימלי) ─────────────────────────────────────────────
         Padding(padding:const EdgeInsets.fromLTRB(20,16,20,0),
           child:Row(children:[
             GestureDetector(
-              onTap: _onLogoTap,
+              onTap:_onLogoTap,
               child:ShaderMask(shaderCallback:(b)=>const LinearGradient(colors:[Pal.gold,Color(0xFFFF9F0A)]).createShader(b),
-                child:const Text('\u05D9\u05D3\u05E2\u05DF',style:TextStyle(fontSize:36,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:3)))),
+                child:const Text('ידען',style:TextStyle(fontSize:36,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:3)))),
             const Spacer(),
-            // \u05DB\u05E4\u05EA\u05D5\u05E8 \u05E4\u05E8\u05D5\u05E4\u05D9\u05DC
             GestureDetector(
-              onTap: () => Navigator.push(context, _slide(const ProfileScreen())),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: UserStatsService.instance.level.color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: UserStatsService.instance.level.color.withOpacity(0.4))),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(UserStatsService.instance.level.emoji, style: const TextStyle(fontSize: 14)),
-                  const SizedBox(width: 3),
-                  Text(UserStatsService.instance.level.label,
-                    style: TextStyle(color: UserStatsService.instance.level.color, fontSize: 11, fontWeight: FontWeight.w700, fontFamily: null)),
-                ]))),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => Navigator.push(context, _slide(const MistakesScreen())),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: Pal.red.withOpacity(0.15), borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Pal.red.withOpacity(0.4))),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text('❌', style: TextStyle(fontSize: 14)),
-                  SizedBox(width: 4),
-                  Text('שגיאות', style: TextStyle(color: Pal.red, fontSize: 12, fontWeight: FontWeight.w700)),
-                ]))),
-            const SizedBox(width: 8),
-            if (defaultTargetPlatform == TargetPlatform.android) ...[
-              const CloudSyncChip(),
-              const SizedBox(width: 8),
-            ],
+              onTap:()=>Navigator.push(context,_slide(const ProfileScreen())),
+              child:Container(
+                padding:const EdgeInsets.all(8),
+                decoration:BoxDecoration(color:Pal.card.withOpacity(0.6),borderRadius:BorderRadius.circular(10),
+                  border:Border.all(color:Colors.white.withOpacity(0.08))),
+                child:const Icon(Icons.settings_outlined,color:Pal.ts,size:20))),
+            const SizedBox(width:10),
             const EnergyChip(),
           ])),
-        const SizedBox(height:12),
-        // ─── Stats strip (KD + XP level + Streak) ────────────────────────────
-        Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_UserStatsStrip()),
-        const SizedBox(height:10),
-        // ─── Bagrut teaser ───────────────────────────────────────────────────
-        Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_BagrutTeaser(anim:_bg)),
-        const SizedBox(height:10),
-        // Stars bar
+        const SizedBox(height:14),
+        // ── Stars bar ────────────────────────────────────────────────────────────────────
         Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_StarsBar()),
-        const SizedBox(height:24),
-        // Only show EASY card in home — medium/hard accessed via map
+        const SizedBox(height:20),
+        // ── Content ──────────────────────────────────────────────────────────────────────────
         Expanded(child:SingleChildScrollView(padding:const EdgeInsets.symmetric(horizontal:20),child:Column(children:[
           _DiffCard(diff:Diff.easy),
-          const SizedBox(height:16),
+          const SizedBox(height:12),
           _DiffCard(diff:Diff.medium),
-          const SizedBox(height:16),
+          const SizedBox(height:12),
           _DiffCard(diff:Diff.hard),
           const SizedBox(height:20),
-          // ─── Categories section ───
-          Align(alignment:Alignment.centerRight,
-            child:Text('🎯 חידון קטגוריות',style:TextStyle(color:Pal.gold,fontSize:15,fontWeight:FontWeight.w800))),
-          const SizedBox(height:10),
-          ..._HomeCats.cats.map((cat){
-            final (key,name,emoji,color)=cat;
-            final count=QRepo.all(PurchaseService.instance.isPremium).where((q)=>q.category==key).length;
-            return Padding(padding:const EdgeInsets.only(bottom:10),
-              child:GestureDetector(
-                onTap:()=>_showCatDiffPicker(context,key,name,emoji,color),
-                child:Container(
-                  padding:const EdgeInsets.symmetric(horizontal:16,vertical:13),
-                  decoration:BoxDecoration(
-                    gradient:LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,
-                      colors:[color.withOpacity(0.18),color.withOpacity(0.05)]),
-                    borderRadius:BorderRadius.circular(16),
-                    border:Border.all(color:color.withOpacity(0.4),width:1.2),
-                    boxShadow:[BoxShadow(color:color.withOpacity(0.10),blurRadius:8)]),
-                  child:Row(children:[
-                    Text(emoji,style:const TextStyle(fontSize:24)),
-                    const SizedBox(width:12),
-                    Expanded(child:Text(name,style:const TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w700))),
-                    Icon(Icons.chevron_right,color:color,size:18),
-                  ]))));
-          }).toList(),
+          // ── קטגוריות (collapsible) ────────────────────────────────────────────────────────────
+          GestureDetector(
+            onTap:()=>setState(()=>_catsExpanded=!_catsExpanded),
+            child:Container(
+              padding:const EdgeInsets.symmetric(horizontal:16,vertical:14),
+              decoration:BoxDecoration(
+                color:Pal.card,borderRadius:BorderRadius.circular(16),
+                border:Border.all(color:Pal.gold.withOpacity(0.3))),
+              child:Row(children:[
+                const Text('🎯',style:TextStyle(fontSize:20)),
+                const SizedBox(width:10),
+                const Expanded(child:Text('קטגוריות',style:TextStyle(color:Pal.tp,fontSize:16,fontWeight:FontWeight.w800))),
+                AnimatedRotation(
+                  turns:_catsExpanded?0.5:0,
+                  duration:const Duration(milliseconds:200),
+                  child:const Icon(Icons.keyboard_arrow_down_rounded,color:Pal.gold)),
+              ]))),
+          AnimatedCrossFade(
+            duration:const Duration(milliseconds:250),
+            crossFadeState:_catsExpanded?CrossFadeState.showSecond:CrossFadeState.showFirst,
+            firstChild:const SizedBox.shrink(),
+            secondChild:Column(children:[
+              const SizedBox(height:10),
+              ..._HomeCats.allCats.map((cat){
+                final (key,name,emoji,color)=cat;
+                return Padding(padding:const EdgeInsets.only(bottom:8),
+                  child:GestureDetector(
+                    onTap:()=>_showCatDiffPicker(context,key,name,emoji,color),
+                    child:Container(
+                      padding:const EdgeInsets.symmetric(horizontal:14,vertical:12),
+                      decoration:BoxDecoration(
+                        gradient:LinearGradient(begin:Alignment.centerRight,end:Alignment.centerLeft,
+                          colors:[color.withOpacity(0.15),color.withOpacity(0.04)]),
+                        borderRadius:BorderRadius.circular(12),
+                        border:Border.all(color:color.withOpacity(0.35))),
+                      child:Row(children:[
+                        Text(emoji,style:const TextStyle(fontSize:22)),
+                        const SizedBox(width:12),
+                        Expanded(child:Text(name,style:const TextStyle(color:Pal.tp,fontSize:14,fontWeight:FontWeight.w700))),
+                        Icon(Icons.arrow_back_ios_new_rounded,color:color,size:13),
+                      ]))));
+              }).toList(),
+            ])),
           const SizedBox(height:16),
+          // ── בגרות בהיסטוריה ────────────────────────────────────────────────────────────────────────
+          _BagrutHomeCard(anim:_bg),
+          const SizedBox(height:16),
+          // ── פרו ────────────────────────────────────────────────────────────────────────────────────
           if(!PurchaseService.instance.isPremium)
             ListenableBuilder(listenable:PurchaseService.instance,builder:(_,__)=>
               GestureDetector(
                 onTap:()=>showModalBottomSheet(context:context,isScrollControlled:true,backgroundColor:Colors.transparent,builder:(_)=>const PaywallSheet()),
                 child:Container(
-                  width:double.infinity,
-                  padding:const EdgeInsets.symmetric(vertical:16),
+                  width:double.infinity,padding:const EdgeInsets.symmetric(vertical:16),
                   decoration:BoxDecoration(
                     gradient:const LinearGradient(colors:[Color(0xFFFF9F0A),Color(0xFFFF6B00)]),
-                    borderRadius:BorderRadius.circular(18),
-                    boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.4),blurRadius:16,offset:const Offset(0,4))]),
+                    borderRadius:BorderRadius.circular(16),
+                    boxShadow:[BoxShadow(color:Pal.premium.withOpacity(0.35),blurRadius:12,offset:const Offset(0,4))]),
                   child:const Column(children:[
-                    Text('👑  רכוש פרו',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900)),
-                    SizedBox(height:4),
-                    Text('יותר מוחות · ללא פרסומות · בגרות בהיסטוריה',textDirection:TextDirection.rtl,style:TextStyle(color:Colors.white70,fontSize:12)),
+                    Text('👑  ידען פרו',style:TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w900)),
+                    SizedBox(height:3),
+                    Text('ללא פרסומות · בגרות · שלבים קשים',textDirection:TextDirection.rtl,
+                      style:TextStyle(color:Colors.white70,fontSize:12)),
                   ])))),
-          const SizedBox(height:24),
+          const SizedBox(height:28),
         ]))),
       ])),
     ]));
   }
 }
 
+// ── כרטיס בגרות בדף הבית ──────────────────────────────────────────────────────────────────────
+class _BagrutHomeCard extends StatelessWidget {
+  final AnimationController anim;
+  const _BagrutHomeCard({required this.anim});
+
+  void _open(BuildContext ctx) {
+    final allowed = PurchaseService.instance.isPremium || BagrutService.instance.devUnlocked;
+    if (!allowed) { Navigator.push(ctx,MaterialPageRoute(builder:(_)=>const BagrutPaywallScreen())); return; }
+    final svc = BagrutService.instance;
+    Navigator.push(ctx,MaterialPageRoute(builder:(_)=>svc.isConfigured?const BagrutMainScreen():const BagrutTrackSelectionScreen()));
+  }
+
+  @override
+  Widget build(BuildContext ctx) => AnimatedBuilder(
+    animation:anim,
+    builder:(_,__){
+      final glow = 0.15 + anim.value * 0.2;
+      return GestureDetector(
+        onTap:()=>_open(ctx),
+        child:Container(
+          padding:const EdgeInsets.symmetric(horizontal:16,vertical:14),
+          decoration:BoxDecoration(
+            color:const Color(0xFF0F2044),
+            borderRadius:BorderRadius.circular(16),
+            border:Border.all(color:Pal.gold.withOpacity(glow+0.15),width:1.2),
+            boxShadow:[BoxShadow(color:Pal.gold.withOpacity(glow*0.25),blurRadius:12)]),
+          child:Row(children:[
+            Container(width:42,height:42,
+              decoration:BoxDecoration(
+                gradient:const LinearGradient(colors:[Pal.gold,Color(0xFFFF9500)]),
+                borderRadius:BorderRadius.circular(11)),
+              child:const Center(child:Text('📜',style:TextStyle(fontSize:22)))),
+            const SizedBox(width:12),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Row(children:[
+                const Text('בגרות בהיסטוריה',style:TextStyle(color:Pal.tp,fontSize:15,fontWeight:FontWeight.w800)),
+                const SizedBox(width:8),
+                Container(
+                  padding:const EdgeInsets.symmetric(horizontal:6,vertical:2),
+                  decoration:BoxDecoration(color:Pal.gold,borderRadius:BorderRadius.circular(5)),
+                  child:const Text('חדש',style:TextStyle(color:Colors.black,fontSize:9,fontWeight:FontWeight.w900))),
+              ]),
+              const SizedBox(height:2),
+              const Text('תרגול חכם לפי חוזקות וחולשות',style:TextStyle(color:Pal.ts,fontSize:12)),
+            ])),
+            const Icon(Icons.arrow_back_ios_new_rounded,color:Pal.ts,size:13),
+          ]),
+        ),
+      );
+    });
+}
 // helper: show difficulty picker for category quiz
 void _showCatDiffPicker(BuildContext ctx,String key,String name,String emoji,Color color){
   showModalBottomSheet(context:ctx,backgroundColor:Colors.transparent,builder:(_)=>
@@ -1891,6 +1996,10 @@ class _HomeCats {
     ('geography','גיאוגרפיה','🌍',Color(0xFF2ECC71)),
     ('science','מדע','🔬',Color(0xFF3498DB)),
     ('world','תרבות עולמית','🎬',Color(0xFFE67E22)),
+  ];
+  // american_music זמין רק דרך חידון קטגוריות
+  static const allCats = [
+    ...cats,
     ('american_music','מוזיקה אמריקאית','🎸',Color(0xFFD35400)),
   ];
 }
@@ -2396,8 +2505,16 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
   late final AnimationController _shakeCtrl,_cardCtrl,_energyLossCtrl;
   late final Animation<double> _shake,_card,_energyLossOpacity,_energyLossOffset;
   bool _exiting=false;
+  late final bool _showEnergyOverlay;
+
   @override void initState(){
     super.initState();
+    // בדיקה סינכרונית — נטען בעליית האפליקציה
+    _showEnergyOverlay = widget.diff == Diff.easy &&
+        widget.levelIndex == 0 &&
+        widget.retryWith == null &&
+        !_EnergyOverlay.seen;
+    if (_showEnergyOverlay) _EnergyOverlay.markSeen();
     _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex,retryWith:widget.retryWith);
     _gs.addListener(_onChange);
     EnergyService.instance.addListener(_onEnergyChange);
@@ -2838,13 +2955,13 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
         _levelUpCtrl.forward();
       }
     });
-    // אחרי השלב הראשון — הצג בחירת תחומי עניין, ורק אחריה review
-    _maybeShowInterests().then((_) => _maybeRequestReview());
+    // אחרי השלב הראשון — הצג בחירת תחומי עניין
+    _maybeShowInterests();
   }
 
   Future<void> _maybeShowInterests() async {
     if (InterestsService.instance.hasInterests) return;
-    await Future.delayed(const Duration(milliseconds: 1800));
+    await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
@@ -2862,7 +2979,7 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
       final shownReview = p.getBool('review_dialog_shown') ?? false;
       if (shownReview) return;
       await p.setBool('review_dialog_shown', true);
-      await Future.delayed(const Duration(milliseconds: 2500));
+      await Future.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
       final enjoyed = await showDialog<bool?>(
         context: context,
@@ -3867,7 +3984,6 @@ class _ResultViewState extends State<_ResultView> with TickerProviderStateMixin 
     Future.delayed(const Duration(milliseconds:1800), () {
       if (mounted) setState(() => _showBtns = true);
     });
-    _maybeRequestReview();
   }
 
   Future<void> _maybeRequestReview() async {
@@ -3908,7 +4024,7 @@ class _ResultViewState extends State<_ResultView> with TickerProviderStateMixin 
 
       // שלבים 10 ו-30 — פופ-אפ ישיר
       if (completed == 10 || completed == 30) {
-        await Future.delayed(const Duration(milliseconds: 2500));
+        await Future.delayed(const Duration(milliseconds: 300));
         final review = InAppReview.instance;
         if (await review.isAvailable()) await review.requestReview();
       }
