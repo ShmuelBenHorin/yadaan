@@ -118,6 +118,85 @@ class InterestsService extends ChangeNotifier {
 }
 
 // ═══════════════════════════════════════════════
+//  UI — הכרזה על פיצ'ר חדש (למשתמשים ישנים)
+// ═══════════════════════════════════════════════
+class InterestsFeatureAnnouncementScreen extends StatelessWidget {
+  const InterestsFeatureAnnouncementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A1628),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            children: [
+              const Spacer(),
+              // badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5))),
+                child: const Text('✨  חדש בידען',
+                  style: TextStyle(color: Color(0xFFFFD700), fontSize: 13, fontWeight: FontWeight.w800))),
+              const SizedBox(height: 24),
+              const Text('🎯', style: TextStyle(fontSize: 64)),
+              const SizedBox(height: 20),
+              const Text('שאלות שמתאימות לך',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              const Text(
+                'עכשיו אפשר לבחור את הקטגוריות האהובות עליך\nעדיין תקבל שאלות מכל הנושאים — אבל הרבה פחות',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF7A90C0), fontSize: 16, height: 1.6)),
+              const Spacer(),
+              // chips preview
+              Wrap(
+                spacing: 10, runSpacing: 10,
+                alignment: WrapAlignment.center,
+                children: InterestCat.all.take(6).map((cat) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cat.color.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: cat.color.withOpacity(0.5))),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(cat.emoji, style: const TextStyle(fontSize: 16)),
+                    const SizedBox(width: 6),
+                    Text(cat.label, style: TextStyle(color: cat.color, fontSize: 13, fontWeight: FontWeight.w700)),
+                  ]))).toList()),
+              const Spacer(),
+              // CTA button
+              SizedBox(
+                width: double.infinity, height: 54,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(
+                    builder: (_) => const InterestPickerScreen(isOnboarding: true))),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFD700),
+                    foregroundColor: Colors.black,
+                    elevation: 6,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+                  child: const Text('בחר קטגוריות'))),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('דלג', style: TextStyle(color: Color(0xFF546E7A), fontSize: 14))),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════
 //  UI — מסך בחירת תחומי עניין
 // ═══════════════════════════════════════════════
 class InterestPickerScreen extends StatefulWidget {

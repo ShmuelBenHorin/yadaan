@@ -22,6 +22,7 @@ import 'questions_bagrut.dart';
 import 'sfx_stub.dart' if (dart.library.html) 'sfx_web.dart';
 import 'user_stats.dart';
 import 'interests_service.dart';
+import 'cloud_sync_service.dart';
 
 part 'bagrut_screen.dart';
 // ═══════════════════════════════════════════════
@@ -52,7 +53,7 @@ class Cfg {
   static const adRewardedEnergy             = 2; // מוחות מפרסומת
   static const adRewardedInterstitialEnergy = 1; // אנרגיה מפרסומת עם דילוג
 
-  static const questionsPerLevel    = 10;
+  static const questionsPerLevel    = 8;
   static const starsPerLevel        = 3;
   static const maxWrongPerLevel     = 2;
   static const segmentSize          = 5;
@@ -332,15 +333,56 @@ class QRepo {
   static List<Question> forLevel(int idx, Diff d) {
     final all = forDiff(d);
     // סנן שאלות שכבר נענו נכון
-    var pool = all.where((q) => !(_seen[d]?.contains(q.id) ?? false)).toList();
-    // אם נגמרו השאלות החדשות — אפס את הרשימה
-    if (pool.length < Cfg.questionsPerLevel) {
+    var unseen = all.where((q) => !(_seen[d]?.contains(q.id) ?? false)).toList();
+    if (unseen.length < Cfg.questionsPerLevel) {
       _seen[d] = {};
       SharedPreferences.getInstance().then((p) => p.remove('seen_${d.name}'));
-      pool = List<Question>.from(all);
+      unseen = List<Question>.from(all);
     }
-    pool.shuffle();
-    return pool.take(Cfg.questionsPerLevel).toList();
+
+    final interests = InterestsService.instance;
+    if (!interests.hasInterests) {
+      unseen.shuffle();
+      return unseen.take(Cfg.questionsPerLevel).toList();
+    }
+
+    // בנה pool לפי קטגוריה
+    final rng = Random();
+    final Map<String, List<Question>> liked = {};
+    final Map<String, List<Question>> other = {};
+    for (final q in unseen) {
+      if (interests.isSelected(q.category)) {
+        liked.putIfAbsent(q.category, () => []).add(q);
+      } else {
+        other.putIfAbsent(q.category, () => []).add(q);
+      }
+    }
+    for (final l in liked.values) { l.shuffle(); }
+    for (final l in other.values) { l.shuffle(); }
+
+    // לכל שאלה — בחר קטגוריה קודם (70% אהובה / 30% אחרת), אז שאלה ממנה
+    Question? _pick(Map<String, List<Question>> pool, Set<String> used) {
+      final avail = pool.entries.where((e) => e.value.any((q) => !used.contains(q.id))).toList();
+      if (avail.isEmpty) return null;
+      final cat = avail[rng.nextInt(avail.length)];
+      return cat.value.firstWhere((q) => !used.contains(q.id));
+    }
+
+    final result = <Question>[];
+    final used = <String>{};
+    for (int i = 0; i < Cfg.questionsPerLevel; i++) {
+      final fromLiked = rng.nextDouble() < 0.7 && liked.isNotEmpty;
+      final q = fromLiked
+          ? (_pick(liked, used) ?? _pick(other, used))
+          : (_pick(other, used) ?? _pick(liked, used));
+      if (q != null) { result.add(q); used.add(q.id); }
+    }
+    // השלם אם חסר
+    if (result.length < Cfg.questionsPerLevel) {
+      final rem = unseen.where((q) => !used.contains(q.id)).toList()..shuffle();
+      result.addAll(rem.take(Cfg.questionsPerLevel - result.length));
+    }
+    return result;
   }
   static int levelCount(Diff d) => max(1,(forDiff(d).length/Cfg.questionsPerLevel).floor());
   static List<Question> all(bool prem) =>
@@ -712,6 +754,7 @@ class GameState extends ChangeNotifier {
     if(_stars==Cfg.starsPerLevel)await Sfx.perfect();
     await LevelService.instance.save(diff,levelIdx,_stars);
     ICloudKV.saveAll(); // גיבוי רקע ל-iCloud
+    if (defaultTargetPlatform == TargetPlatform.android) CloudSyncService.instance.saveProgress();
     _phase=Phase.complete;
     notifyListeners();
   }
@@ -837,6 +880,7 @@ void main() async {
   await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
   await UserStatsService.init(); await InterestsService.init(); await BagrutService.init();
+  if (defaultTargetPlatform == TargetPlatform.android) await CloudSyncService.init();
   // כניסה יומית
   Analytics.dailyOpen(streak: UserStatsService.instance.streak);
   ICloudKV.saveAll(); // גיבוי ראשוני ל-iCloud — עוזר למשתמשים שמעדכנים מגרסה ישנה
@@ -1324,7 +1368,7 @@ class _UserStatsStrip extends StatelessWidget {
                   Text(lvl.label,
                     style: TextStyle(color: lvl.color, fontSize: 11, fontWeight: FontWeight.w800)),
                   const Spacer(),
-                  Text('${us.xp} נק׳',
+                  Text('${us.xp} XP',
                     style: const TextStyle(color: Color(0xFF78909C), fontSize: 10)),
                 ]),
                 const SizedBox(height: 3),
@@ -1650,6 +1694,18 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
     LevelService.instance.addListener((){if(mounted)setState((){});});
     PurchaseService.instance.addListener((){if(mounted)setState((){});});
     UserStatsService.instance.addListener((){if(mounted)setState((){});});
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkInterestAnnouncement());
+  }
+
+  Future<void> _checkInterestAnnouncement() async {
+    final p = await SharedPreferences.getInstance();
+    final seen = p.getBool('interests_feature_seen') ?? false;
+    if (seen || !mounted) return;
+    await p.setBool('interests_feature_seen', true);
+    // הצג רק למשתמשים שכבר שיחקו (יש להם כוכבים או שלבים)
+    if (LevelService.instance.allStars == 0) return;
+    await Navigator.push(context, MaterialPageRoute(
+      builder: (_) => const InterestsFeatureAnnouncementScreen()));
   }
   @override void dispose(){_bg.dispose();_tapReset?.cancel();super.dispose();}
   @override Widget build(BuildContext context){
@@ -1695,6 +1751,10 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
                   Text('שגיאות', style: TextStyle(color: Pal.red, fontSize: 12, fontWeight: FontWeight.w700)),
                 ]))),
             const SizedBox(width: 8),
+            if (defaultTargetPlatform == TargetPlatform.android) ...[
+              const CloudSyncChip(),
+              const SizedBox(width: 8),
+            ],
             const EnergyChip(),
           ])),
         const SizedBox(height:12),
@@ -1887,7 +1947,7 @@ class _StarsBar extends StatelessWidget {
         border:Border.all(color:Pal.gold.withOpacity(0.2))),
       child:Row(children:[
         const Text('\u2B50',style:TextStyle(fontSize:15)),const SizedBox(width:8),
-        Text('$all \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD',textDirection:TextDirection.ltr,style:const TextStyle(color:Pal.gold,fontWeight:FontWeight.w700,fontSize:13)),
+        Text('$all',textDirection:TextDirection.ltr,style:const TextStyle(color:Pal.gold,fontWeight:FontWeight.w700,fontSize:13)),
         if(next!=null)...[
           const SizedBox(width:10),
           Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(4),
@@ -2814,7 +2874,11 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
       if (enjoyed == true) {
         FirebaseAnalytics.instance.logEvent(name: 'review_prompt_yes');
         final review = InAppReview.instance;
-        if (await review.isAvailable()) await review.requestReview();
+        if (await review.isAvailable()) {
+          await review.requestReview();
+        } else {
+          await review.openStoreListing();
+        }
       } else if (enjoyed == false) {
         FirebaseAnalytics.instance.logEvent(name: 'review_prompt_no');
       } else {
@@ -3829,7 +3893,11 @@ class _ResultViewState extends State<_ResultView> with TickerProviderStateMixin 
         if (enjoyed == true) {
           FirebaseAnalytics.instance.logEvent(name: 'review_prompt_yes');
           final review = InAppReview.instance;
-          if (await review.isAvailable()) await review.requestReview();
+          if (await review.isAvailable()) {
+            await review.requestReview();
+          } else {
+            await review.openStoreListing();
+          }
         } else if (enjoyed == false) {
           FirebaseAnalytics.instance.logEvent(name: 'review_prompt_no');
         } else {
