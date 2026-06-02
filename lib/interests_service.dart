@@ -42,9 +42,11 @@ class InterestsService extends ChangeNotifier {
   final Map<String, int> _attempts = {};
 
   // ─── Getters ────────────────────────────────
+  bool _userPickedInterests = false; // האם המשתמש בחר בעצמו (לא ברירת מחדל)
+
   Set<String> get selected => Set.unmodifiable(_interests);
   bool isSelected(String key) => _interests.contains(key);
-  bool get hasInterests => _interests.isNotEmpty;
+  bool get hasInterests => _userPickedInterests;
 
   /// קטגוריות חולשה: 3+ טעויות מתוך 10+ ניסיונות
   Set<String> get weaknesses => _attempts.entries
@@ -63,6 +65,7 @@ class InterestsService extends ChangeNotifier {
   static Future<void> init() async {
     final p = await SharedPreferences.getInstance();
     final saved = p.getStringList('interests_v1');
+    _i._userPickedInterests = saved != null;
     _i._interests = (saved ?? _defaultInterests.toList()).toSet();
     for (final c in InterestCat.all) {
       _i._mistakes[c.key]  = p.getInt('weak_m_${c.key}') ?? 0;
@@ -73,6 +76,7 @@ class InterestsService extends ChangeNotifier {
   // ─── Set Interests ───────────────────────────
   Future<void> setInterests(Set<String> interests) async {
     _interests = interests;
+    _userPickedInterests = true;
     final p = await SharedPreferences.getInstance();
     await p.setStringList('interests_v1', interests.toList());
     notifyListeners();

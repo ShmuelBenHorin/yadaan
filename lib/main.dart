@@ -341,10 +341,6 @@ class QRepo {
     }
 
     final interests = InterestsService.instance;
-    if (!interests.hasInterests) {
-      unseen.shuffle();
-      return unseen.take(Cfg.questionsPerLevel).toList();
-    }
 
     // בנה pool לפי קטגוריה
     final rng = Random();
