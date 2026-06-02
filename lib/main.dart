@@ -935,57 +935,33 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 }
 
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-//  ONBOARDING
+//  ONBOARDING \u2014 \u05DE\u05E1\u05DA \u05D9\u05D7\u05D9\u05D3: \u05D4\u05E1\u05D1\u05E8 \u05DE\u05D5\u05D7\u05D5\u05EA
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
-class _OPage {
-  final String emoji, title, body;
-  const _OPage({required this.emoji, required this.title, required this.body});
-  Widget build() => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 36),
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text(emoji, style: const TextStyle(fontSize: 84)),
-      const SizedBox(height: 32),
-      Text(title, textAlign: TextAlign.center,
-        style: const TextStyle(color: Pal.tp, fontSize: 26, fontWeight: FontWeight.w900, height: 1.3)),
-      const SizedBox(height: 16),
-      Text(body, textAlign: TextAlign.center,
-        style: const TextStyle(color: Pal.ts, fontSize: 16, height: 1.75)),
-    ]),
-  );
-}
-
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
   @override State<OnboardingScreen> createState() => _OnboardingState();
 }
-class _OnboardingState extends State<OnboardingScreen> {
-  final _ctrl = PageController();
-  int _page = 0;
+class _OnboardingState extends State<OnboardingScreen> with SingleTickerProviderStateMixin {
+  late final AnimationController _brainCtrl;
+  late final Animation<double> _brainY;
+  late final Animation<double> _brainOpacity;
 
-  static const _pages = [
-    _OPage(
-      emoji: '\uD83D\uDC4B',
-      title: '\u05D1\u05E8\u05D5\u05DA \u05D4\u05D1\u05D0 \u05DC\u05D9\u05D3\u05E2\u05DF!',
-      body: '\u05D7\u05D9\u05D3\u05D5\u05DF \u05D9\u05D3\u05E2 \u05D1\u05E2\u05D1\u05E8\u05D9\u05EA\n\u05E2\u05E0\u05D4 \u05E2\u05DC \u05E9\u05D0\u05DC\u05D5\u05EA, \u05E2\u05DC\u05D4 \u05D1\u05E9\u05DC\u05D1\u05D9\u05DD\n\u05D5\u05D4\u05D5\u05DB\u05D7 \u05E9\u05D0\u05EA\u05D4 \u05D9\u05D3\u05E2\u05DF \u05D0\u05DE\u05D9\u05EA\u05D9',
-    ),
-    _OPage(
-      emoji: '\uD83E\uDDE0',
-      title: '\u05E9\u05DE\u05D5\u05E8 \u05E2\u05DC \u05D4\u05DE\u05D5\u05D7\u05D5\u05EA \u05E9\u05DC\u05DA',
-      body: '\u05E2\u05DC \u05DB\u05DC \u05D8\u05E2\u05D5\u05EA \u05D9\u05D5\u05E8\u05D3 \u05DE\u05D5\u05D7 \u05D0\u05D7\u05D3\n\u05DE\u05D5\u05D7 \u05D0\u05D7\u05D3 \u05DE\u05EA\u05D7\u05D3\u05E9 \u05DB\u05DC 15 \u05D3\u05E7\u05D5\u05EA\n\u05E6\u05E4\u05D4 \u05D1\u05E4\u05E8\u05E1\u05D5\u05DE\u05EA \u05DC\u05D7\u05D9\u05D3\u05D5\u05E9 \u05DE\u05D9\u05D9\u05D3\u05D9',
-    ),
-    _OPage(
-      emoji: '\u2B50',
-      title: '\u05E6\u05D1\u05D5\u05E8 \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD \u05D5\u05E2\u05DC\u05D4',
-      body: '\u05E2\u05DC \u05DB\u05DC \u05E9\u05DC\u05D1 \u05DE\u05D5\u05E6\u05DC\u05D7 \u2014 \u05E2\u05D3 3 \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD\n\u05E6\u05D1\u05D5\u05E8 \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD \u05DB\u05D3\u05D9 \u05DC\u05E4\u05EA\u05D5\u05D7 \u05E9\u05DC\u05D1\u05D9\u05DD \u05D7\u05D3\u05E9\u05D9\u05DD\n\u05D4\u05D2\u05E2 \u05DC\u05E8\u05DE\u05D5\u05EA \u05D1\u05D9\u05E0\u05D5\u05E0\u05D9 \u05D5\u05E7\u05E9\u05D4',
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _brainCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _brainY = Tween(begin: 0.0, end: -48.0).animate(CurvedAnimation(parent: _brainCtrl, curve: Curves.easeOut));
+    _brainOpacity = Tween(begin: 1.0, end: 0.0).animate(CurvedAnimation(parent: _brainCtrl, curve: Curves.easeIn));
+    // \u05DE\u05E8\u05D9\u05E5 \u05DC\u05D5\u05DC\u05D0\u05D4: \u05DE\u05D5\u05D7 \u05D9\u05D5\u05E8\u05D3 \u05D5\u05E2\u05D5\u05DC\u05D4 \u05DB\u05DC 2 \u05E9\u05E0\u05D9\u05D5\u05EA
+    Future.delayed(const Duration(milliseconds: 600), _loop);
+  }
 
-  void _next() {
-    if (_page < _pages.length - 1) {
-      _ctrl.nextPage(duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
-    } else {
-      _done();
-    }
+  void _loop() {
+    if (!mounted) return;
+    _brainCtrl.forward(from: 0).then((_) {
+      if (!mounted) return;
+      Future.delayed(const Duration(milliseconds: 1400), _loop);
+    });
   }
 
   Future<void> _done() async {
@@ -994,66 +970,102 @@ class _OnboardingState extends State<OnboardingScreen> {
     if (mounted) Navigator.pushReplacement(context, _slide(const HomeScreen()));
   }
 
-  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+  @override void dispose() { _brainCtrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Pal.bg,
-      body: Stack(children: [
-        const StarField(),
-        SafeArea(child: Column(children: [
-          Align(
-            alignment: Alignment.topLeft,
-            child: TextButton(
-              onPressed: _done,
-              child: const Text('\u05D3\u05DC\u05D2', style: TextStyle(color: Pal.ts, fontSize: 15)),
-            ),
-          ),
-          Expanded(
-            child: PageView.builder(
-              controller: _ctrl,
-              onPageChanged: (i) => setState(() => _page = i),
-              itemCount: _pages.length,
-              itemBuilder: (_, i) => _pages[i].build(),
-            ),
-          ),
-          Row(mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_pages.length, (i) =>
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: _page == i ? 24 : 8, height: 8,
-                decoration: BoxDecoration(
-                  color: _page == i ? Pal.gold : Pal.ts.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(4)),
-              )
-            ),
-          ),
-          const SizedBox(height: 28),
-          Padding(
+    final maxE = EnergyService.instance.maxE;
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Pal.bg,
+        body: Stack(children: [
+          const StarField(),
+          SafeArea(child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: GestureDetector(
-              onTap: _next,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF4D96FF), Color(0xFF2E5FCC)]),
-                  borderRadius: BorderRadius.circular(18),
-                  boxShadow: [BoxShadow(color: const Color(0xFF4D96FF).withOpacity(0.4), blurRadius: 16, offset: const Offset(0,4))],
+            child: Column(children: [
+              const Spacer(),
+              // \u05D0\u05E0\u05D9\u05DE\u05E6\u05D9\u05D9\u05EA \u05DE\u05D5\u05D7 \u05D9\u05D5\u05E8\u05D3
+              SizedBox(height: 120, child: Stack(alignment: Alignment.center, children: [
+                // \u05E9\u05D5\u05E8\u05EA \u05DE\u05D5\u05D7\u05D5\u05EA
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  for (int i = 0; i < 5; i++) ...[
+                    Text('\uD83E\uDDE0', style: TextStyle(fontSize: 32, color: i < 4 ? null : Colors.white.withOpacity(0.2))),
+                    if (i < 4) const SizedBox(width: 6),
+                  ],
+                ]),
+                // \u05DE\u05D5\u05D7 \u05E9\u05D9\u05D5\u05E8\u05D3 (\u05D0\u05E0\u05D9\u05DE\u05E6\u05D9\u05D4)
+                AnimatedBuilder(
+                  animation: _brainCtrl,
+                  builder: (_, __) => Positioned(
+                    top: 10 - _brainY.value,
+                    right: 16,
+                    child: Opacity(
+                      opacity: _brainOpacity.value,
+                      child: const Text('\u22121\uD83E\uDDE0', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Pal.red)),
+                    ),
+                  ),
                 ),
-                child: Text(
-                  _page == _pages.length - 1 ? '\u05D1\u05D5\u05D0\u05D5 \u05E0\u05E9\u05D7\u05E7! \uD83D\uDE80' : '\u05D4\u05D1\u05D0  \u203A',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+              ])),
+              const SizedBox(height: 32),
+              // \u05DB\u05D5\u05EA\u05E8\u05EA
+              const Text('\u05D4\u05DE\u05D5\u05D7\u05D5\u05EA \u05E9\u05DC\u05DA', textAlign: TextAlign.center,
+                style: TextStyle(color: Pal.tp, fontSize: 30, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 16),
+              // \u05D4\u05E1\u05D1\u05E8
+              RichText(
+                textAlign: TextAlign.center,
+                text: TextSpan(
+                  style: const TextStyle(color: Pal.ts, fontSize: 16, height: 1.8),
+                  children: [
+                    const TextSpan(text: '\u05E2\u05DC \u05DB\u05DC '),
+                    const TextSpan(text: '\u05EA\u05E9\u05D5\u05D1\u05D4 \u05E9\u05D2\u05D5\u05D9\u05D4', style: TextStyle(color: Pal.red, fontWeight: FontWeight.w800)),
+                    const TextSpan(text: ' \u05D9\u05D5\u05E8\u05D3 \u05DE\u05D5\u05D7 \u05D0\u05D7\u05D3\n'),
+                    const TextSpan(text: '\u05E0\u05D2\u05DE\u05E8\u05D5 \u05D4\u05DE\u05D5\u05D7\u05D5\u05EA? \u05DE\u05DE\u05EA\u05D9\u05E0\u05D9\u05DD \u05E9\u05D9\u05EA\u05D7\u05D3\u05E9\u05D5\n\n'),
+                    const TextSpan(text: '\u05DE\u05D5\u05D7 \u05D0\u05D7\u05D3 \u05DE\u05EA\u05D7\u05D3\u05E9 \u05DB\u05DC '),
+                    TextSpan(text: '${Cfg.energyRechargeMins} \u05D3\u05E7\u05D5\u05EA', style: const TextStyle(color: Pal.gold, fontWeight: FontWeight.w800)),
+                    const TextSpan(text: ' \u2014 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA'),
+                  ],
                 ),
               ),
-            ),
-          ),
-          const SizedBox(height: 36),
-        ])),
-      ]),
+              const SizedBox(height: 28),
+              // \u05DB\u05E8\u05D8\u05D9\u05E1 \u05E4\u05E8\u05DE\u05D9\u05D5\u05DD-\u05E7\u05D0\u05DC-\u05D8\u05D5-\u05D0\u05E7\u05E9\u05DF \u05E7\u05E6\u05E8
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: BoxDecoration(
+                  color: Pal.premium.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Pal.premium.withOpacity(0.4))),
+                child: Row(children: [
+                  const Text('\uD83D\uDC51', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(
+                    '\u05D2\u05E8\u05E1\u05EA \u05E4\u05E8\u05D5: $maxE \u05DE\u05D5\u05D7\u05D5\u05EA + \u05D4\u05EA\u05D7\u05D3\u05E9\u05D5\u05EA \u05DE\u05D4\u05D9\u05E8\u05D4 \u05E4\u05D9 3',
+                    textDirection: TextDirection.rtl,
+                    style: TextStyle(color: Pal.premium, fontSize: 13, fontWeight: FontWeight.w700, height: 1.4))),
+                ]),
+              ),
+              const Spacer(),
+              // \u05DB\u05E4\u05EA\u05D5\u05E8 \u05D4\u05EA\u05D7\u05DC
+              GestureDetector(
+                onTap: _done,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF4D96FF), Color(0xFF2E5FCC)]),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [BoxShadow(color: const Color(0xFF4D96FF).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 4))],
+                  ),
+                  child: const Text('\u05D1\u05D5\u05D0\u05D5 \u05E0\u05E9\u05D7\u05E7! \uD83D\uDE80', textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                ),
+              ),
+              const SizedBox(height: 36),
+            ]),
+          )),
+        ]),
+      ),
     );
   }
 }
