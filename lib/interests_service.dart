@@ -87,35 +87,34 @@ class InterestsService extends ChangeNotifier {
   }
 
   // ─── Weighted Category Picker ────────────────
-  /// בחירת שאלה לפי תחומי עניין + חולשות
-  /// 70% תחומי עניין, 20% כללי, 10% חולשות (אם קיימות)
+  /// כל קטגוריה לא-נבחרת מקבלת 3% קבוע בדיוק.
+  /// שאר ה-% (100% − 3%×מספר_לא_נבחרות) מתחלק שווה בין הנבחרות,
+  /// עם בוסט קל לקטגוריות חולשה (מתוך הנבחרות בלבד).
   String pickCategory(List<String> available, Random rng) {
     if (_interests.isEmpty) {
       return available[rng.nextInt(available.length)];
     }
 
-    final interestCats   = available.where(_interests.contains).toList();
-    final weaknessCats   = available.where(isWeakness).toList();
-    final generalCats    = available.where((c) => !_interests.contains(c)).toList();
+    final interestCats = available.where(_interests.contains).toList();
+    final generalCats  = available.where((c) => !_interests.contains(c)).toList();
 
-    // בנה bucket ממוזן: 90% עניין, ~10% כללי (מחולק על פני כל הקטגוריות הלא-נבחרות)
-    final bucket = <String>[];
-    for (int i = 0; i < 9; i++) {
-      if (interestCats.isNotEmpty) bucket.add(interestCats[rng.nextInt(interestCats.length)]);
-    }
-    // slot אחד בלבד לכלל הקטגוריות שלא נבחרו — כדי לא לרכז weight כשיש קטגוריה אחת
-    if (generalCats.isNotEmpty) {
-      bucket.add(generalCats[rng.nextInt(generalCats.length)]);
-    }
-    // slot חולשות — fallback לאינטרסים (לא לכללי, למנוע הגברת קטגוריה לא-נבחרת)
-    if (weaknessCats.isNotEmpty) {
-      bucket.add(weaknessCats[rng.nextInt(weaknessCats.length)]);
-    } else if (interestCats.isNotEmpty) {
-      bucket.add(interestCats[rng.nextInt(interestCats.length)]);
+    if (interestCats.isEmpty) return available[rng.nextInt(available.length)];
+
+    // כל קטגוריה לא-נבחרת = 3% בדיוק
+    final generalTotal = generalCats.length * 0.03;
+    final r = rng.nextDouble();
+
+    if (generalCats.isNotEmpty && r < generalTotal) {
+      // בחר אחת מהלא-נבחרות בשוויון (כל אחת מקבלת 3%)
+      return generalCats[rng.nextInt(generalCats.length)];
     }
 
-    return bucket.isEmpty ? available[rng.nextInt(available.length)]
-                          : bucket[rng.nextInt(bucket.length)];
+    // שאר ה-% לנבחרות — עם בוסט לחולשות
+    final weaknessCats = interestCats.where(isWeakness).toList();
+    if (weaknessCats.isNotEmpty && rng.nextDouble() < 0.15) {
+      return weaknessCats[rng.nextInt(weaknessCats.length)];
+    }
+    return interestCats[rng.nextInt(interestCats.length)];
   }
 }
 
@@ -209,11 +208,15 @@ class InterestPickerScreen extends StatefulWidget {
 
 class _IPState extends State<InterestPickerScreen> {
   final Set<String> _sel = {};
+  static const _maxUnselected = 5; // אפשר לבטל עד 5 קטגוריות לכל היותר
 
   @override void initState() {
     super.initState();
     _sel.addAll(InterestsService.instance.selected);
   }
+
+  int get _unselected => InterestCat.all.length - _sel.length;
+  bool get _atLimit    => _unselected >= _maxUnselected;
 
   @override Widget build(BuildContext context) {
     final canSave = _sel.isNotEmpty;
@@ -244,6 +247,8 @@ class _IPState extends State<InterestPickerScreen> {
                 onTap: () {
                   setState(() {
                     if (selected) {
+                      // מניעת ביטול אם כבר הגענו למגבלת 5 לא-נבחרות
+                      if (_atLimit) return;
                       _sel.remove(cat.key);
                     } else {
                       _sel.add(cat.key);
@@ -272,8 +277,27 @@ class _IPState extends State<InterestPickerScreen> {
               );
             },
           )),
-          const SizedBox(height: 16),
-          Text('${_sel.length} נבחרו', style: const TextStyle(color: Color(0xFF78909C), fontSize: 13)),
+          const SizedBox(height: 12),
+          // הסבר ה-3% + אינדיקטור מגבלה
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Column(children: [
+              Text(
+                _unselected == 0
+                    ? 'כל הקטגוריות נבחרו — חלוקה שווה'
+                    : 'קטגוריות לא-נבחרות מקבלות 3% סיכוי כל אחת',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF78909C), fontSize: 12)),
+              const SizedBox(height: 4),
+              Text(
+                _atLimit
+                    ? '⚠️ הגעת למגבלה — אפשר לבטל עד $_maxUnselected קטגוריות'
+                    : 'ניתן לבטל עוד ${_maxUnselected - _unselected} קטגוריות',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: _atLimit ? const Color(0xFFFF7043) : const Color(0xFF546E7A),
+                  fontSize: 12, fontWeight: _atLimit ? FontWeight.w700 : FontWeight.w400)),
+            ])),
           const SizedBox(height: 12),
           SizedBox(width: double.infinity,
             child: ElevatedButton(
