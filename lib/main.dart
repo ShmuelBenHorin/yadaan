@@ -970,7 +970,6 @@ class _OnboardingState extends State<OnboardingScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final maxE = EnergyService.instance.maxE;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -1005,8 +1004,8 @@ class _OnboardingState extends State<OnboardingScreen> with SingleTickerProvider
               ])),
               const SizedBox(height: 32),
               // \u05DB\u05D5\u05EA\u05E8\u05EA
-              const Text('\u05D4\u05DE\u05D5\u05D7\u05D5\u05EA \u05E9\u05DC\u05DA', textAlign: TextAlign.center,
-                style: TextStyle(color: Pal.tp, fontSize: 30, fontWeight: FontWeight.w900)),
+              const Text('\u05DB\u05DE\u05D4 \u05D0\u05EA\u05D4 \u05D7\u05DB\u05DD \u05D1\u05D9\u05D7\u05E1 \u05DC\u05D0\u05D5\u05DB\u05DC\u05D5\u05E1\u05D9\u05D4?', textAlign: TextAlign.center,
+                style: TextStyle(color: Pal.tp, fontSize: 24, fontWeight: FontWeight.w900, height: 1.3)),
               const SizedBox(height: 16),
               // \u05D4\u05E1\u05D1\u05E8
               RichText(
@@ -1023,23 +1022,6 @@ class _OnboardingState extends State<OnboardingScreen> with SingleTickerProvider
                     const TextSpan(text: ' \u2014 \u05D0\u05D5\u05D8\u05D5\u05DE\u05D8\u05D9\u05EA'),
                   ],
                 ),
-              ),
-              const SizedBox(height: 28),
-              // \u05DB\u05E8\u05D8\u05D9\u05E1 \u05E4\u05E8\u05DE\u05D9\u05D5\u05DD-\u05E7\u05D0\u05DC-\u05D8\u05D5-\u05D0\u05E7\u05E9\u05DF \u05E7\u05E6\u05E8
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  color: Pal.premium.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Pal.premium.withOpacity(0.4))),
-                child: Row(children: [
-                  const Text('\uD83D\uDC51', style: TextStyle(fontSize: 22)),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(
-                    '\u05D2\u05E8\u05E1\u05EA \u05E4\u05E8\u05D5: $maxE \u05DE\u05D5\u05D7\u05D5\u05EA + \u05D4\u05EA\u05D7\u05D3\u05E9\u05D5\u05EA \u05DE\u05D4\u05D9\u05E8\u05D4 \u05E4\u05D9 3',
-                    textDirection: TextDirection.rtl,
-                    style: TextStyle(color: Pal.premium, fontSize: 13, fontWeight: FontWeight.w700, height: 1.4))),
-                ]),
               ),
               const Spacer(),
               // \u05DB\u05E4\u05EA\u05D5\u05E8 \u05D4\u05EA\u05D7\u05DC
