@@ -1932,8 +1932,6 @@ class _BagrutHomeCard extends StatelessWidget {
                   decoration:BoxDecoration(color:Pal.gold,borderRadius:BorderRadius.circular(5)),
                   child:const Text('חדש',style:TextStyle(color:Colors.black,fontSize:9,fontWeight:FontWeight.w900))),
               ]),
-              const SizedBox(height:2),
-              const Text('תרגול חכם לפי חוזקות וחולשות',style:TextStyle(color:Pal.ts,fontSize:12)),
             ])),
             const Icon(Icons.arrow_back_ios_new_rounded,color:Pal.ts,size:13),
           ]),
