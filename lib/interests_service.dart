@@ -56,9 +56,14 @@ class InterestsService extends ChangeNotifier {
   bool isWeakness(String key) => weaknesses.contains(key);
 
   // ─── Init ────────────────────────────────────
+  // ברירת מחדל: כל הקטגוריות חוץ ממוזיקה אמריקאית
+  static Set<String> get _defaultInterests =>
+      InterestCat.all.map((c) => c.key).where((k) => k != 'american_music').toSet();
+
   static Future<void> init() async {
     final p = await SharedPreferences.getInstance();
-    _i._interests = (p.getStringList('interests_v1') ?? []).toSet();
+    final saved = p.getStringList('interests_v1');
+    _i._interests = (saved ?? _defaultInterests.toList()).toSet();
     for (final c in InterestCat.all) {
       _i._mistakes[c.key]  = p.getInt('weak_m_${c.key}') ?? 0;
       _i._attempts[c.key]  = p.getInt('weak_a_${c.key}') ?? 0;
@@ -212,7 +217,9 @@ class _IPState extends State<InterestPickerScreen> {
 
   @override void initState() {
     super.initState();
-    _sel.addAll(InterestsService.instance.selected);
+    final current = InterestsService.instance.selected;
+    // משתמש חדש (אין שמור) → ברירת מחדל: הכל חוץ ממוזיקה אמריקאית
+    _sel.addAll(current.isEmpty ? InterestsService._defaultInterests : current);
   }
 
   int get _unselected => InterestCat.all.length - _sel.length;
