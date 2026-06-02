@@ -98,18 +98,20 @@ class InterestsService extends ChangeNotifier {
     final weaknessCats   = available.where(isWeakness).toList();
     final generalCats    = available.where((c) => !_interests.contains(c)).toList();
 
-    // בנה bucket ממוזן
+    // בנה bucket ממוזן: 90% עניין, ~10% כללי (מחולק על פני כל הקטגוריות הלא-נבחרות)
     final bucket = <String>[];
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 9; i++) {
       if (interestCats.isNotEmpty) bucket.add(interestCats[rng.nextInt(interestCats.length)]);
     }
-    for (int i = 0; i < 2; i++) {
-      if (generalCats.isNotEmpty) bucket.add(generalCats[rng.nextInt(generalCats.length)]);
+    // slot אחד בלבד לכלל הקטגוריות שלא נבחרו — כדי לא לרכז weight כשיש קטגוריה אחת
+    if (generalCats.isNotEmpty) {
+      bucket.add(generalCats[rng.nextInt(generalCats.length)]);
     }
+    // slot חולשות — fallback לאינטרסים (לא לכללי, למנוע הגברת קטגוריה לא-נבחרת)
     if (weaknessCats.isNotEmpty) {
       bucket.add(weaknessCats[rng.nextInt(weaknessCats.length)]);
-    } else if (generalCats.isNotEmpty) {
-      bucket.add(generalCats[rng.nextInt(generalCats.length)]);
+    } else if (interestCats.isNotEmpty) {
+      bucket.add(interestCats[rng.nextInt(interestCats.length)]);
     }
 
     return bucket.isEmpty ? available[rng.nextInt(available.length)]
