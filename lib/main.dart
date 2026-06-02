@@ -2951,6 +2951,8 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
     if (InterestsService.instance.hasInterests) return;
     final p = await SharedPreferences.getInstance();
     if ((p.getInt('levels_completed') ?? 0) < 3) return;
+    if (p.getBool('interests_prompt_shown') ?? false) return;
+    await p.setBool('interests_prompt_shown', true);
     await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
     await showModalBottomSheet(
@@ -3152,6 +3154,8 @@ class _FS extends State<FailedScreen> with SingleTickerProviderStateMixin {
     if (InterestsService.instance.hasInterests) return;
     final p = await SharedPreferences.getInstance();
     if ((p.getInt('levels_completed') ?? 0) < 3) return;
+    if (p.getBool('interests_prompt_shown') ?? false) return;
+    await p.setBool('interests_prompt_shown', true);
     await Future.delayed(const Duration(milliseconds: 1400));
     if (!mounted) return;
     await showModalBottomSheet(
