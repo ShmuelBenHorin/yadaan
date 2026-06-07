@@ -106,8 +106,12 @@ class Analytics {
 
   // שלבים
   static Future<void> levelCompleted({required String diff, required int levelIndex, required int stars}) async {
-    try { await _fa?.logEvent(name:'level_completed',
-      parameters:{'diff':diff,'level':levelIndex,'stars':stars}); } catch(_){}
+    try {
+      await _fa?.logEvent(name:'level_completed',
+        parameters:{'diff':diff,'level':levelIndex,'stars':stars});
+      // User Property: השלב המקסימלי שהמשתמש הגיע אליו — לראייה פר-משתמש בFirebase
+      await _fa?.setUserProperty(name:'max_level_reached', value:'${diff}_$levelIndex');
+    } catch(_){}
   }
   static Future<void> levelFailed({required String diff, required int levelIndex}) async {
     try { await _fa?.logEvent(name:'level_failed',
