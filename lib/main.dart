@@ -2673,7 +2673,7 @@ class _FactBanner extends StatelessWidget {
         child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(ok?'\u2705':'\u274C',style:const TextStyle(fontSize:16)),const SizedBox(width:10),
           Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(ok?'\u05E0\u05DB\u05D5\u05DF!':'\u05EA\u05E9\u05D5\u05D1\u05D4: ${q.a[q.c]}',style:TextStyle(color:c,fontWeight:FontWeight.w800,fontSize:13)),
+            Text(ok?'\u05E0\u05DB\u05D5\u05DF!':'\u05EA\u05E9\u05D5\u05D1\u05D4: ${q.a[q.c]}',textDirection:TextDirection.rtl,style:TextStyle(color:c,fontWeight:FontWeight.w800,fontSize:13)),
             if(q.f!=null)...[const SizedBox(height:4),Text(q.f!,textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.ts,fontSize:12,height:1.4))],
           ])),
         ])));
@@ -2707,7 +2707,7 @@ class _ABtnS extends State<_ABtn> with SingleTickerProviderStateMixin {
             Container(width:30,height:30,decoration:BoxDecoration(color:lc.withOpacity(0.15),borderRadius:BorderRadius.circular(8),border:Border.all(color:lc.withOpacity(0.5))),
               child:Center(child:Text(letters[widget.i],style:TextStyle(color:lc,fontWeight:FontWeight.w900,fontSize:13)))),
             const SizedBox(width:12),
-            Expanded(child:Text(widget.gs.cur.a[widget.i],style:TextStyle(color:widget.gs.fb&&widget.i!=widget.gs.cur.c&&widget.i!=widget.gs.sel?Pal.ts:Pal.tp,fontSize:14,fontWeight:FontWeight.w600))),
+            Expanded(child:Text(widget.gs.cur.a[widget.i],textDirection:TextDirection.rtl,style:TextStyle(color:widget.gs.fb&&widget.i!=widget.gs.cur.c&&widget.i!=widget.gs.sel?Pal.ts:Pal.tp,fontSize:14,fontWeight:FontWeight.w600))),
             if(widget.gs.fb)Text(widget.i==widget.gs.cur.c?'\u2705':widget.i==widget.gs.sel?'\u274C':'',style:const TextStyle(fontSize:16)),
           ]))));
   }
@@ -3275,7 +3275,7 @@ class MistakesScreen extends StatelessWidget {
                       border: Border.all(color: Pal.green.withOpacity(0.4))),
                     child: Row(children: [
                       const Text('✅ ', style: TextStyle(fontSize: 14)),
-                      Expanded(child: Text(q.a[q.c], style: const TextStyle(color: Pal.green, fontSize: 14, fontWeight: FontWeight.w700))),
+                      Expanded(child: Text(q.a[q.c], textDirection: TextDirection.rtl, style: const TextStyle(color: Pal.green, fontSize: 14, fontWeight: FontWeight.w700))),
                     ])),
                   if (q.f != null) ...[
                     const SizedBox(height: 8),
