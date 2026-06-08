@@ -3440,8 +3440,21 @@ class PaywallSheet extends StatefulWidget {
 }
 class _PS extends State<PaywallSheet>{
   String? _errMsg;
-  @override void initState(){super.initState();PurchaseService.instance.addListener(_rebuild);}
-  void _rebuild(){if(mounted)setState((){});}
+  @override void initState(){
+    super.initState();
+    PurchaseService.instance.addListener(_rebuild);
+    // אם כבר פרמיום — סגור מיד (מניעת מצב שבו מסך הרכישה נפתח אחרי רכישה)
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      if(mounted && PurchaseService.instance.isPremium) Navigator.pop(context);
+    });
+  }
+  void _rebuild(){
+    if(mounted){
+      setState((){});
+      // אם הרכישה הצליחה בזמן שהמסך פתוח — סגור
+      if(PurchaseService.instance.isPremium) Navigator.pop(context);
+    }
+  }
   @override void dispose(){PurchaseService.instance.removeListener(_rebuild);super.dispose();}
   @override Widget build(BuildContext context){
     final ps=PurchaseService.instance;
@@ -3519,6 +3532,8 @@ class _PS extends State<PaywallSheet>{
                 child:CircularProgressIndicator(color:Color(0xFFFFD700)))
             else GestureDetector(
               onTap:()async{
+                // אם כבר פרמיום — סגור מיד (מניעת רכישה כפולה)
+                if(ps.isPremium){Navigator.pop(context);return;}
                 setState(()=>_errMsg=null);
                 if(ps.packages.isEmpty) await ps.loadOfferings();
                 if(!mounted)return;
@@ -3529,7 +3544,7 @@ class _PS extends State<PaywallSheet>{
                 try{
                   final ok=await ps.purchase(ps.packages.first);
                   if(!mounted)return;
-                  if(ok)Navigator.pop(context);
+                  if(ok) Navigator.pop(context);
                 }on PurchasesError catch(e){
                   if(!mounted)return;
                   setState(()=>_errMsg='שגיאת רכישה: ${e.message}');
