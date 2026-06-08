@@ -109,8 +109,12 @@ class Analytics {
     try {
       await _fa?.logEvent(name:'level_completed',
         parameters:{'diff':diff,'level':levelIndex,'stars':stars});
-      // User Property: השלב המקסימלי שהמשתמש הגיע אליו — לראייה פר-משתמש בFirebase
+      // User Property: השלב המקסימלי שהמשתמש הגיע אליו
       await _fa?.setUserProperty(name:'max_level_reached', value:'${diff}_$levelIndex');
+      // User Property: סך השלבים שהמשתמש השלים — רואים פר-משתמש בFirebase
+      final p = await SharedPreferences.getInstance();
+      final total = (p.getInt('levels_completed') ?? 0);
+      await _fa?.setUserProperty(name:'total_levels_completed', value:'$total');
     } catch(_){}
   }
   static Future<void> levelFailed({required String diff, required int levelIndex}) async {
