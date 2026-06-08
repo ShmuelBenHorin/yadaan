@@ -126,6 +126,13 @@ class Analytics {
       parameters:{'diff':diff,'level':levelIndex,'stages_played':_sessionStages}); } catch(_){}
   }
 
+  // רכישת פרו
+  static Future<void> proPurchased({required String source}) async {
+    // source: 'purchase' | 'restore'
+    try { await _fa?.logEvent(name:'pro_tier_purchased',
+      parameters:{'source':source}); } catch(_){}
+  }
+
   // paywall — מסך רכישה
   static Future<void> paywallShown(String source) async {
     // source: 'no_energy' | 'locked_level' | 'category'
@@ -581,7 +588,11 @@ class PurchaseService extends ChangeNotifier {
     try{
       final ci=await Purchases.purchasePackage(pkg);
       _pro=ci.entitlements.all[Cfg.entitlement]?.isActive??false;
-      if(_pro){EnergyService.instance._e=EnergyService.instance.maxE;EnergyService.instance.notifyListeners();}
+      if(_pro){
+        EnergyService.instance._e=EnergyService.instance.maxE;
+        EnergyService.instance.notifyListeners();
+        Analytics.proPurchased(source:'purchase');
+      }
       _loading=false;notifyListeners();return _pro;
     }on PurchasesError catch(e){
       debugPrint('RC purchase error: ${e.code} — ${e.message}');
@@ -598,7 +609,11 @@ class PurchaseService extends ChangeNotifier {
     try{
       final ci=await Purchases.restorePurchases();
       _pro=ci.entitlements.all[Cfg.entitlement]?.isActive??false;
-      if(_pro){EnergyService.instance._e=EnergyService.instance.maxE;EnergyService.instance.notifyListeners();}
+      if(_pro){
+        EnergyService.instance._e=EnergyService.instance.maxE;
+        EnergyService.instance.notifyListeners();
+        Analytics.proPurchased(source:'restore');
+      }
       _loading=false;notifyListeners();return _pro;
     }catch(_){_loading=false;notifyListeners();return false;}
   }
