@@ -5,7 +5,7 @@
 
 ## App Overview
 Flutter trivia app (Hebrew, RTL). iOS + Android. Monetized via RevenueCat IAP (Pro tier).
-Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.14+54`
+Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.14+55`
 
 ## Key Files
 | File | Purpose |
