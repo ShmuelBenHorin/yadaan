@@ -221,10 +221,13 @@ class Analytics {
 // ═══════════════════════════════════════════════
 class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
-  static const _channelId   = 'yadaan_energy';
-  static const _channelName = 'אנרגיה';
+  static const _channelId      = 'yadaan_energy';
+  static const _channelName    = 'אנרגיה';
+  static const _streakChannelId   = 'yadaan_streak';
+  static const _streakChannelName = 'רצף יומי';
   static const _energyId    = 1;
   static const _dailyId     = 2;
+  static const _streakId    = 3;
 
   static Future<void> init() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -236,13 +239,15 @@ class NotificationService {
     await _plugin.initialize(
       const InitializationSettings(android: android, iOS: iOS),
     );
-    // צור channel לאנדרואיד
-    await _plugin.resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(const AndroidNotificationChannel(
-        _channelId, _channelName,
-        importance: Importance.high,
-      ));
+    // צור channels לאנדרואיד
+    final ap = _plugin.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+    await ap?.createNotificationChannel(const AndroidNotificationChannel(
+      _channelId, _channelName, importance: Importance.high,
+    ));
+    await ap?.createNotificationChannel(const AndroidNotificationChannel(
+      _streakChannelId, _streakChannelName, importance: Importance.high,
+    ));
   }
 
   // בקש הרשאה (iOS בלבד — אנדרואיד אוטומטי מ-13+)
@@ -281,6 +286,42 @@ class NotificationService {
   // ביטול notification אנרגיה (כשנכנסים לאפליקציה)
   static Future<void> cancelEnergyNotification() async {
     await _plugin.cancel(_energyId);
+  }
+
+  // תזמן נוטיפיקציה לרצף ב-20:00 היום (אם עוד לא שיחקו)
+  static Future<void> scheduleStreakReminder(int streakDays) async {
+    await _plugin.cancel(_streakId);
+    final now = DateTime.now();
+    final when = DateTime(now.year, now.month, now.day, 20, 0);
+    if (!when.isAfter(now)) return; // עבר 20:00 — לא מתזמנים
+    final title = streakDays >= 7
+        ? '🔥 $streakDays ימים ברצף — אל תשבור אותו!'
+        : streakDays >= 3
+        ? '🔥 $streakDays ימים ברצף — עוד יום אחד!'
+        : streakDays == 1
+        ? '🔥 יום ראשון ברצף — המשך הלאה!'
+        : '🧠 יש לך שאלות שמחכות לך!';
+    const body = 'פתח את ידען ושחק לפני חצות';
+    await _plugin.zonedSchedule(
+      _streakId, title, body,
+      _toTZDateTime(when),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _streakChannelId, _streakChannelName,
+          importance: Importance.high, priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  // ביטול נוטיפיקציה רצף (כשמשחקים היום)
+  static Future<void> cancelStreakNotification() async {
+    await _plugin.cancel(_streakId);
   }
 
   static tz.TZDateTime _toTZDateTime(DateTime dt) {
@@ -588,6 +629,19 @@ class PurchaseService extends ChangeNotifier {
     try{
       final ci=await Purchases.purchasePackage(pkg);
       _pro=ci.entitlements.all[Cfg.entitlement]?.isActive??false;
+      // fallback: אם entitlement 'premium' לא נמצא — בדוק כל entitlement פעיל
+      if(!_pro && ci.entitlements.active.isNotEmpty) _pro=true;
+      // fallback 2: sync ו-refetch אחרי השהייה קצרה (עיכוב שרת RevenueCat)
+      if(!_pro){
+        await Future.delayed(const Duration(milliseconds:800));
+        try{
+          await Purchases.syncPurchases();
+          final ci2=await Purchases.getCustomerInfo();
+          _pro=ci2.entitlements.all[Cfg.entitlement]?.isActive??false;
+          if(!_pro && ci2.entitlements.active.isNotEmpty) _pro=true;
+          debugPrint('RC fallback entitlements: ${ci2.entitlements.all.keys}');
+        }catch(e2){debugPrint('RC sync fallback error: $e2');}
+      }
       if(_pro){
         EnergyService.instance._e=EnergyService.instance.maxE;
         EnergyService.instance.notifyListeners();
@@ -609,6 +663,8 @@ class PurchaseService extends ChangeNotifier {
     try{
       final ci=await Purchases.restorePurchases();
       _pro=ci.entitlements.all[Cfg.entitlement]?.isActive??false;
+      // fallback: כל entitlement פעיל
+      if(!_pro && ci.entitlements.active.isNotEmpty) _pro=true;
       if(_pro){
         EnergyService.instance._e=EnergyService.instance.maxE;
         EnergyService.instance.notifyListeners();
@@ -732,6 +788,8 @@ class GameState extends ChangeNotifier {
       await Sfx.correct(); QRepo.markSeen(cur.id,diff);
       // KD + XP + streak
       await UserStatsService.instance.recordAnswer(correct: true, diffIndex: diff.index);
+      // ביטול נוטיפיקציית רצף — המשתמש שיחק היום
+      NotificationService.cancelStreakNotification();
       InterestsService.instance.recordAnswer(category: cur.category, correct: true);
       // level up event
       final lu = UserStatsService.instance.consumeLevelUp();
@@ -916,6 +974,12 @@ void main() async {
   if (defaultTargetPlatform == TargetPlatform.android) await CloudSyncService.init();
   // כניסה יומית
   Analytics.dailyOpen(streak: UserStatsService.instance.streak);
+  // נוטיפיקציה לרצף — תזמן ל-20:00 אם לא שיחקו היום, בטל אם כבר שיחקו
+  if (UserStatsService.instance.playedToday) {
+    NotificationService.cancelStreakNotification();
+  } else {
+    NotificationService.scheduleStreakReminder(UserStatsService.instance.streak);
+  }
   ICloudKV.saveAll(); // גיבוי ראשוני ל-iCloud — עוזר למשתמשים שמעדכנים מגרסה ישנה
   // ─── AdMob אתחול ──────────────────────────────────────────────────────────
   if (Cfg.adMobEnabled && !kIsWeb) {
@@ -942,6 +1006,12 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     if(s==AppLifecycleState.resumed){
       NotificationService.cancelEnergyNotification();
       EnergyService.instance._check();
+      // עדכן נוטיפיקציית רצף בכל חזרה לאפליקציה
+      if(UserStatsService.instance.playedToday){
+        NotificationService.cancelStreakNotification();
+      } else {
+        NotificationService.scheduleStreakReminder(UserStatsService.instance.streak);
+      }
     }
   }
   @override Widget build(BuildContext context) {
@@ -1361,13 +1431,8 @@ class _UserStatsStrip extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: Row(children: [
-        // ─── Streak ───
-        _StatPill(
-          emoji: '🔥',
-          label: '${us.streak}',
-          sublabel: 'רצף',
-          color: const Color(0xFFFF6B35),
-        ),
+        // ─── Streak ─── (בולט יותר)
+        _StreakPill(streak: us.streak),
         const SizedBox(width: 8),
         // ─── KD ───
         _StatPill(
@@ -1410,6 +1475,46 @@ class _UserStatsStrip extends StatelessWidget {
             ]),
           ),
         )),
+      ]),
+    );
+  }
+}
+
+// Streak pill — בולט יותר עם אפקט זוהר כשיש רצף
+class _StreakPill extends StatelessWidget {
+  final int streak;
+  const _StreakPill({required this.streak});
+  @override Widget build(BuildContext context) {
+    const color = Color(0xFFFF6B35);
+    final hasStreak = streak > 0;
+    final bigStreak = streak >= 7;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(hasStreak ? 0.18 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withOpacity(hasStreak ? 0.7 : 0.25),
+          width: hasStreak ? 1.5 : 1.0,
+        ),
+        boxShadow: bigStreak ? [
+          BoxShadow(color: color.withOpacity(0.4), blurRadius: 14, spreadRadius: 1),
+        ] : hasStreak ? [
+          BoxShadow(color: color.withOpacity(0.2), blurRadius: 8),
+        ] : null,
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(bigStreak ? '🔥' : '🔥',
+          style: TextStyle(fontSize: bigStreak ? 22 : 18)),
+        const SizedBox(height: 2),
+        Text('$streak',
+          style: TextStyle(
+            color: color,
+            fontSize: bigStreak ? 22 : 20,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+          )),
+        const Text('רצף', style: TextStyle(color: Color(0xFF78909C), fontSize: 9)),
       ]),
     );
   }

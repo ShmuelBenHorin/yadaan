@@ -45,6 +45,7 @@ class UserStatsService extends ChangeNotifier {
   int get total      => _correct + _wrong;
   int get streak     => _streak;
   int get bestStreak => _bestStreak;
+  bool get playedToday => _lastPlayDate == _dateStr(DateTime.now());
 
   /// KD: אחוז תשובות נכונות
   double get kd          => total == 0 ? 0.0 : _correct / total;
