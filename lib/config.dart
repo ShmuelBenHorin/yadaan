@@ -1,70 +1,62 @@
-// ════════════════════════════════════════════════════════
-//  config.dart  —  כל ההגדרות של המשחק במקום אחד
-//  שים קובץ זה ב: lib/config.dart
-// ════════════════════════════════════════════════════════
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
+// ═══════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════
 class Cfg {
+  static const rcAndroid            = 'goog_uYtvWookyMtAzQQXtOyGOETNCXz';
+  static const rciOS                = 'appl_DSEyAVZKuOktZXgzNqiPKhjnOlO';
+  static const entitlement          = 'premium';
+  static const devCode              = 'shmuel1231';
+  static const mockPremium          = false;
+  static const adMobEnabled         = true;
+  static const adEnergyThreshold    = 3;
 
-  // ─── RevenueCat ───────────────────────────────────────
-  static const rcAndroid   = 'YOUR_REVENUECAT_ANDROID_KEY';
-  static const rciOS       = 'YOUR_REVENUECAT_IOS_KEY';
-  static const entitlement = 'premium';
+  // ─── AdMob Ad Unit IDs ───────────────────────────────────────────────────
+  // פרסומת מלאה 30 שניות → +5 אנרגיה
+  static String get adRewardedUnitId =>
+      defaultTargetPlatform == TargetPlatform.iOS
+          ? 'ca-app-pub-1305167445502870/9990640892'  // iOS Rewarded
+          : 'ca-app-pub-1305167445502870/2554080569'; // Android Rewarded
 
-  // ─── קוד מפתח (לפתיחת פרו בלי תשלום בזמן פיתוח) ────
-  static const devCode     = 'shmuel1231';
-  static const mockPremium = false;  // true = כל המשתמשים נחשבים פרו
+  // פרסומת עם דילוג אחרי כמה שניות → +1 אנרגיה
+  static String get adRewardedInterstitialUnitId =>
+      defaultTargetPlatform == TargetPlatform.iOS
+          ? 'ca-app-pub-1305167445502870/4131809558'  // iOS Rewarded Interstitial
+          : 'ca-app-pub-1305167445502870/1697217900'; // Android Rewarded Interstitial
 
-  // ─── שאלות ───────────────────────────────────────────
-  // כמה שאלות בכל שלב
-  static const questionsPerLevel = 7;
+  static const adRewardedEnergy             = 2; // מוחות מפרסומת
+  static const adRewardedInterstitialEnergy = 1; // אנרגיה מפרסומת עם דילוג
 
-  // ─── כוכבים ──────────────────────────────────────────
-  // כמה כוכבים מקסימום לשלב
-  static const starsPerLevel = 3;
+  static const questionsPerLevel    = 8;
+  static const starsPerLevel        = 3;
+  static const maxWrongPerLevel     = 2;
+  static const segmentSize          = 5;
+  static const starsPerSegment      = 10;
+  static const starsToUnlockMedium  = 10;
+  static const starsToUnlockHard    = 15;
 
-  // כמה טעויות מותר לפני שמאבדים כוכב
-  // 0 טעויות = 3 כוכבים, 1 טעות = 2 כוכבים, 2 טעויות = 1 כוכב
-  static const maxWrongPerLevel = 2;
-
-  // כמה כוכבים צריך לצבור (מהשלב הקודם) כדי לפתוח את השלב הבא
-  static const starsToUnlockNext = 2;
-
-  // ─── פתיחת רמות ──────────────────────────────────────
-  // כמה כוכבים כולל נדרשים לפתיחת רמה בינוני
-  // (10 = ממוצע 2 כוכבים מתוך 5 שלבים)
-  static const starsToUnlockMedium = 25;
-
-  // כמה כוכבים כולל נדרשים לפתיחת רמה קשה (דורש גם פרו)
-  static const starsToUnlockHard = 25;
-
-  // ─── אנרגיה ──────────────────────────────────────────
-  // מקסימום אנרגיה למשתמש רגיל
-  static const maxEnergyFree = 12;
-
-  // מקסימום אנרגיה למשתמש פרו
-  static const maxEnergyPremium = 50;
-
-  // כמה אנרגיה עולה תשובה שגויה
-  static const energyCostWrong = 1;
-
-  // כמה אנרגיה עולה כישלון בשלב
-  static const energyCostFail = 0;
-
-  // כל כמה דקות מתווספת אנרגיה
-  static const energyRechargeMins = 2;
-
-  // כמה אנרגיה מתווספת כל טעינה — משתמש רגיל
-  static const energyRechargeAmt = 1;
-
-  // כמה אנרגיה מתווספת כל טעינה — פרו
+  static const maxEnergyFree        = 15;
+  static const maxEnergyPremium     = 50;
+  static const energyCostWrong      = 1;
+  static const energyCostFail       = 1;
+  static const energyRechargeMins   = 15;
+  static const energyRechargeAmt    = 1;
   static const energyRechargeAmtPro = 3;
 
-  // ─── טיימר ───────────────────────────────────────────
-  // כמה שניות יש לענות על כל שאלה
-  static const timerSecs = 10;
-
+  static const timerSecs            = 15;
 }
-class Cfg {
-  static const bool adMobEnabled = false;
-  static const int adEnergyThreshold = 5;
+
+// ═══════════════════════════════════════════════
+//  PALETTE
+// ═══════════════════════════════════════════════
+class Pal {
+  static const bg=Color(0xFF0D1B3E), bgD=Color(0xFF060D20);
+  static const card=Color(0xFF112054), cardL=Color(0xFF1A2E6E);
+  static const gold=Color(0xFFFFD700), accent=Color(0xFF7C6FE0);
+  static const green=Color(0xFF2ECC71), red=Color(0xFFE74C3C);
+  static const premium=Color(0xFFFF9F0A);
+  static const tp=Color(0xFFF0F0FF), ts=Color(0xFF8898CC);
+  static const starOn=Color(0xFFFFD700), starOff=Color(0xFF2A3A6E);
 }
