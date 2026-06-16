@@ -946,6 +946,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Text('⚙️  כלים נוספים',
                   style: TextStyle(color: Pal.ts, fontSize: 13, fontWeight: FontWeight.w700))),
               const SizedBox(height: 10),
+              _SettingsRow(icon: Icons.tune, color: Pal.gold, label: 'קטגוריות מועדפות',
+                onTap: _openInterests),
+              const SizedBox(height: 8),
               _SfxToggleRow(),
               const SizedBox(height: 8),
               _SettingsRow(icon: Icons.close, color: Pal.red, label: 'שגיאות אחרונות',
@@ -957,9 +960,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onTap: () {}),
               if (defaultTargetPlatform == TargetPlatform.android)
                 const SizedBox(height: 8),
-              _SettingsRow(icon: Icons.tune, color: Pal.gold, label: 'קטגוריות מועדפות',
-                onTap: _openInterests),
-              const SizedBox(height: 8),
               _SettingsRow(icon: Icons.star_outline_rounded, color: const Color(0xFFFFD700), label: 'דרג אותנו ⭐',
                 onTap: () async {
                   final review = InAppReview.instance;
