@@ -681,9 +681,25 @@ class PurchaseService extends ChangeNotifier {
 //  SOUND
 // ═══════════════════════════════════════════════
 class Sfx {
+  // ─── השתקה ───────────────────────────────────
+  static final ValueNotifier<bool> mutedNotifier = ValueNotifier(false);
+  static bool get muted => mutedNotifier.value;
+
+  static Future<void> init() async {
+    final p = await SharedPreferences.getInstance();
+    mutedNotifier.value = p.getBool('sfx_muted') ?? false;
+  }
+
+  static Future<void> setMuted(bool v) async {
+    mutedNotifier.value = v;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool('sfx_muted', v);
+  }
+
   // ✅ נכון — מרימבה בהירה בדיוק כמו Duolingo
   // שלושה harmonic ביחד: בסיס + אוקטבה + קווינטה — נותן את הצליל "עץ" הזה
   static Future<void> correct() async {
+    if (muted) return;
     playWebTone([
       {'freq': 1318, 'dur': 0.55, 'vol': 0.42, 'type': 'sine', 'attack': 0.005},
       {'freq': 2637, 'dur': 0.35, 'vol': 0.14, 'type': 'sine', 'attack': 0.005, 'overlap': true},
@@ -694,6 +710,7 @@ class Sfx {
 
   // ❌ טעות — "dunk" נמוך ועמוק כמו Duolingo, לא בוזר
   static Future<void> wrong() async {
+    if (muted) return;
     playWebTone([
       {'freq': 294, 'glide': 196, 'dur': 0.38, 'vol': 0.48, 'type': 'sine', 'attack': 0.008},
       {'freq': 196, 'dur': 0.28, 'vol': 0.22, 'type': 'sine', 'attack': 0.008, 'overlap': true},
@@ -703,6 +720,7 @@ class Sfx {
 
   // 🏆 מושלם — ג'ינגל חגיגי קצר בסגנון Duolingo streak
   static Future<void> perfect() async {
+    if (muted) return;
     playWebTone([
       {'freq': 784,  'dur': 0.13, 'vol': 0.40, 'type': 'sine', 'attack': 0.005},
       {'freq': 988,  'dur': 0.13, 'vol': 0.40, 'type': 'sine', 'attack': 0.005},
@@ -719,6 +737,7 @@ class Sfx {
 
   // 💀 נכשלת — שלושה "dunk" יורדים, כמו Duolingo כשמפסידים streak
   static Future<void> fail() async {
+    if (muted) return;
     playWebTone([
       {'freq': 392, 'glide': 330, 'dur': 0.32, 'vol': 0.42, 'type': 'sine', 'attack': 0.008},
       {'freq': 330, 'glide': 277, 'dur': 0.32, 'vol': 0.38, 'type': 'sine', 'attack': 0.008},
@@ -974,7 +993,7 @@ void main() async {
   await NotificationService.init();
   await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
-  await UserStatsService.init(); await InterestsService.init(); await BagrutService.init(); await _EnergyOverlay.init();
+  await UserStatsService.init(); await InterestsService.init(); await BagrutService.init(); await _EnergyOverlay.init(); await Sfx.init();
   SeasonalService.init(); // ברקע — לא מחכים
   if (defaultTargetPlatform == TargetPlatform.android) await CloudSyncService.init();
   // כניסה יומית
@@ -1592,7 +1611,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: ListenableBuilder(
-        listenable: Listenable.merge([us, InterestsService.instance]),
+        listenable: Listenable.merge([us, InterestsService.instance, Sfx.mutedNotifier]),
         builder: (_, __) {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -1735,6 +1754,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Text('⚙️  כלים נוספים',
                   style: TextStyle(color: Pal.ts, fontSize: 13, fontWeight: FontWeight.w700))),
               const SizedBox(height: 10),
+              _SfxToggleRow(),
+              const SizedBox(height: 8),
               _SettingsRow(icon: Icons.close, color: Pal.red, label: 'שגיאות אחרונות',
                 onTap: () => Navigator.push(context, _slide(const MistakesScreen()))),
               const SizedBox(height: 8),
@@ -1778,6 +1799,35 @@ class _SettingsRow extends StatelessWidget {
         Expanded(child: Text(label, style: const TextStyle(color: Pal.tp, fontSize: 14, fontWeight: FontWeight.w600))),
         const Icon(Icons.arrow_back_ios_new_rounded, color: Pal.ts, size: 13),
       ])));
+}
+
+class _SfxToggleRow extends StatelessWidget {
+  @override Widget build(BuildContext context) {
+    final muted = Sfx.muted;
+    return GestureDetector(
+      onTap: () => Sfx.setMuted(!muted),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF112054),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.06))),
+        child: Row(children: [
+          Icon(muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+            color: muted ? Pal.ts : Pal.accent, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Text(muted ? 'צלילים — מושתק' : 'צלילים — פעיל',
+            style: const TextStyle(color: Pal.tp, fontSize: 14, fontWeight: FontWeight.w600))),
+          Switch(
+            value: !muted,
+            onChanged: (v) => Sfx.setMuted(!v),
+            activeColor: Pal.accent,
+            activeTrackColor: Pal.accent.withOpacity(0.3),
+            inactiveThumbColor: Pal.ts,
+            inactiveTrackColor: Colors.white.withOpacity(0.1),
+          ),
+        ])));
+  }
 }
 
 class _StatBox extends StatelessWidget {
