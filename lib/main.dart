@@ -23,8 +23,10 @@ import 'sfx_stub.dart' if (dart.library.html) 'sfx_web.dart';
 import 'user_stats.dart';
 import 'interests_service.dart';
 import 'cloud_sync_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 part 'bagrut_screen.dart';
+part 'seasonal_service.dart';
 // ═══════════════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════════════
@@ -736,6 +738,7 @@ class Sfx {
 enum Phase{playing,complete,failed}
 class GameState extends ChangeNotifier {
   final int levelIdx; final Diff diff;
+  final bool isSeasonal;
   late final List<Question> _queue;
   late final int _originalTotal;
   int _answeredCorrect=0,_stars=Cfg.starsPerLevel,_wrong=0,_timer=Cfg.timerSecs;
@@ -743,7 +746,7 @@ class GameState extends ChangeNotifier {
   int? _sel; bool _fb=false; Phase _phase=Phase.playing; Timer? _t;
   final List<Question> _failedQs=[];
   List<Question> get failedQuestions=>List.from(_failedQs);
-  GameState({required this.levelIdx,required this.diff,List<Question>? retryWith}){
+  GameState({required this.levelIdx,required this.diff,List<Question>? retryWith,this.isSeasonal=false}){
     if(retryWith==null) Analytics.levelStarted();
     if(retryWith!=null){
       // שאלות שנכשלו קודם + שאלות חדשות להשלמה לTotal
@@ -785,7 +788,8 @@ class GameState extends ChangeNotifier {
     if(_fb||_waitingContinue)return; _t?.cancel(); _sel=idx; _fb=true; notifyListeners();
     final ok=idx==cur.c;
     if(ok){
-      await Sfx.correct(); QRepo.markSeen(cur.id,diff);
+      await Sfx.correct();
+      if(!isSeasonal) QRepo.markSeen(cur.id,diff); // שאלות עונתיות לא נסמנות כ"נראו"
       // KD + XP + streak
       await UserStatsService.instance.recordAnswer(correct: true, diffIndex: diff.index);
       // ביטול נוטיפיקציית רצף — המשתמש שיחק היום
@@ -971,6 +975,7 @@ void main() async {
   await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
   await UserStatsService.init(); await InterestsService.init(); await BagrutService.init(); await _EnergyOverlay.init();
+  SeasonalService.init(); // ברקע — לא מחכים
   if (defaultTargetPlatform == TargetPlatform.android) await CloudSyncService.init();
   // כניסה יומית
   Analytics.dailyOpen(streak: UserStatsService.instance.streak);
@@ -1872,6 +1877,7 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
     LevelService.instance.addListener((){if(mounted)setState((){});});
     PurchaseService.instance.addListener((){if(mounted)setState((){});});
     UserStatsService.instance.addListener((){if(mounted)setState((){});});
+    SeasonalService.instance.addListener((){if(mounted)setState((){});});
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkInterestAnnouncement());
   }
 
@@ -1919,6 +1925,11 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height:20),
         // ── Content ──────────────────────────────────────────────────────────────────────────
         Expanded(child:SingleChildScrollView(padding:const EdgeInsets.symmetric(horizontal:20),child:Column(children:[
+          // ── אירועים עונתיים (חם עכשיו) ─────────────────────────────────────
+          ...SeasonalService.instance.activeEvents.map((event) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _SeasonalBanner(event: event),
+          )),
           _DiffCard(diff:Diff.easy),
           const SizedBox(height:12),
           _DiffCard(diff:Diff.medium),
@@ -2181,6 +2192,84 @@ class _StarsBar extends StatelessWidget {
           Text('$next',style:const TextStyle(color:Pal.ts,fontSize:11)),
         ]else const Expanded(child:SizedBox()),
       ]));
+  }
+}
+
+// ── באנר אירוע עונתי ──────────────────────────────────────────────────────
+class _SeasonalBanner extends StatelessWidget {
+  final SeasonalEvent event;
+  const _SeasonalBanner({required this.event});
+
+  void _startQuiz(BuildContext ctx) {
+    Navigator.push(ctx, _slide(GameScreen(
+      diff: Diff.easy,
+      levelIndex: 0,
+      retryWith: event.questions,
+      isSeasonal: true,
+    )));
+  }
+
+  @override
+  Widget build(BuildContext ctx) {
+    final color = event.color;
+    final days  = event.daysLeft;
+    return GestureDetector(
+      onTap: () => _startQuiz(ctx),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerRight,
+            end:   Alignment.centerLeft,
+            colors: [color.withOpacity(0.22), color.withOpacity(0.08)],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withOpacity(0.6), width: 1.5),
+          boxShadow: [BoxShadow(color: color.withOpacity(0.25), blurRadius: 14, offset: const Offset(0, 4))],
+        ),
+        child: Row(children: [
+          // אייקון
+          Container(
+            width: 52, height: 52,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.18),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withOpacity(0.4)),
+            ),
+            child: Center(child: Text(event.emoji, style: const TextStyle(fontSize: 26))),
+          ),
+          const SizedBox(width: 14),
+          // טקסט
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('חם עכשיו 🔥',
+                  style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+              ),
+              const Spacer(),
+              Text(
+                days == 0 ? 'היום בלבד!' : 'עוד $days ימים',
+                style: TextStyle(color: color.withOpacity(0.8), fontSize: 11),
+              ),
+            ]),
+            const SizedBox(height: 5),
+            Text(event.title,
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text('${event.questions.length} שאלות · קש עכשיו',
+              style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12)),
+          ])),
+          const SizedBox(width: 8),
+          Icon(Icons.arrow_back_ios_new_rounded, color: color, size: 16),
+        ]),
+      ),
+    );
   }
 }
 
@@ -2613,7 +2702,8 @@ class _DiffTransitionNode extends StatelessWidget {
 class GameScreen extends StatefulWidget {
   final Diff diff; final int levelIndex;
   final List<Question>? retryWith;
-  const GameScreen({super.key,required this.diff,required this.levelIndex,this.retryWith});
+  final bool isSeasonal;
+  const GameScreen({super.key,required this.diff,required this.levelIndex,this.retryWith,this.isSeasonal=false});
   @override State<GameScreen> createState()=>_GS();
 }
 class _GS extends State<GameScreen> with TickerProviderStateMixin {
@@ -2631,7 +2721,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
         widget.retryWith == null &&
         !_EnergyOverlay.seen;
     if (_showEnergyOverlay) _EnergyOverlay.markSeen();
-    _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex,retryWith:widget.retryWith);
+    _gs=GameState(diff:widget.diff,levelIdx:widget.levelIndex,retryWith:widget.retryWith,isSeasonal:widget.isSeasonal);
     _gs.addListener(_onChange);
     EnergyService.instance.addListener(_onEnergyChange);
     _shakeCtrl=AnimationController(vsync:this,duration:const Duration(milliseconds:400));
