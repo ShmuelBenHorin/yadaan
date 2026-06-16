@@ -26,6 +26,7 @@ String? _pickSoundFile(List<Map<String, dynamic>> notes) {
   if ((firstFreq -  294).abs() < 1) return 'sounds/wrong.wav';
   if ((firstFreq -  784).abs() < 1) return 'sounds/perfect.wav';
   if ((firstFreq -  392).abs() < 1) return 'sounds/fail.wav';
+  if ((firstFreq -  523).abs() < 1) return 'sounds/levelup.wav';
   return null;
 }
 

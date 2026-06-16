@@ -2239,7 +2239,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
       if(widget.seasonalEventId!=null){
         SharedPreferences.getInstance().then((p)=>p.setInt('seasonal_${widget.seasonalEventId}_${widget.levelIndex}',_gs.stars));
       }
-      Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars,isSeasonal:widget.isSeasonal)));});
+      Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars,isSeasonal:widget.isSeasonal,seasonalEventId:widget.seasonalEventId)));});
     }
     if(_gs.phase==Phase.failed&&!_exiting){final fq=_gs.failedQuestions;_exiting=true;Analytics.levelFailed(diff:widget.diff.name,levelIndex:widget.levelIndex);Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex,failedQuestions:fq)));});}
   }
@@ -2606,7 +2606,8 @@ class _IBSState extends State<_InterestBottomSheet> {
 class CompleteScreen extends StatefulWidget {
   final Diff diff; final int levelIndex,stars;
   final bool isSeasonal;
-  const CompleteScreen({super.key,required this.diff,required this.levelIndex,required this.stars,this.isSeasonal=false});
+  final String? seasonalEventId;
+  const CompleteScreen({super.key,required this.diff,required this.levelIndex,required this.stars,this.isSeasonal=false,this.seasonalEventId});
   @override State<CompleteScreen> createState()=>_CS();
 }
 class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
@@ -2641,6 +2642,12 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
     for (int i = 0; i < widget.stars; i++) {
       Future.delayed(Duration(milliseconds: 600 + i * 300), () {
         if (mounted) { _sc[i].forward(); HapticFeedback.lightImpact(); }
+      });
+    }
+    // ניגון ג'ינגל ניצחון (לא בשלב seasonal — כבר יש perfect sound)
+    if (!widget.isSeasonal) {
+      Future.delayed(const Duration(milliseconds: 200), () {
+        Sfx.levelUp();
       });
     }
     // Show buttons after animation
@@ -2802,13 +2809,26 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
                   _bigBtn('השלב הבא ▶', widget.diff.color, () {
                     if(!EnergyService.instance.has){Navigator.push(context,_slide(const NoEnergyScreen()));return;}
                     EnergyService.instance.spend(Cfg.energyCostWrong);
-                    Navigator.pushReplacement(context, _slide(GameScreen(
+                    Navigator.pushReplacement(context, _levelAdvanceRoute(GameScreen(
                       diff: widget.diff, levelIndex: widget.levelIndex + 1)));
                   }),
                   const SizedBox(height: 14),
                 ],
-                _outBtn(widget.isSeasonal ? '⚽  חזרה לשלבים' : '🗺️  מפת שלבים', () =>
-                  Navigator.popUntil(context, (r) => r.isFirst)),
+                _outBtn(
+                  widget.isSeasonal ? '⚽  חזרה לשלבים' : '🗺️  מפת שלבים',
+                  () {
+                    if (widget.isSeasonal) {
+                      // חזרה למסך שלבי המונדיאל
+                      Navigator.popUntil(context, (r) => r.isFirst);
+                    } else {
+                      // חזרה למפת השלבים של הרמה הנוכחית
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        _slide(LevelMapScreen(diff: widget.diff)),
+                        (r) => r.isFirst);
+                    }
+                  },
+                ),
               ]))),
         ])))),
     ]));
@@ -4012,3 +4032,20 @@ Widget _iconBtn(IconData icon,VoidCallback onTap)=>GestureDetector(onTap:onTap,c
 Widget _bigBtn(String l,Color c,VoidCallback t)=>GestureDetector(onTap:t,child:Container(width:double.infinity,padding:const EdgeInsets.symmetric(vertical:18),decoration:BoxDecoration(gradient:LinearGradient(colors:[c,c.withOpacity(0.7)]),borderRadius:BorderRadius.circular(18),boxShadow:[BoxShadow(color:c.withOpacity(0.4),blurRadius:16,offset:const Offset(0,6))]),child:Text(l,textAlign:TextAlign.center,style:const TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w800))));
 Widget _outBtn(String l,VoidCallback t)=>GestureDetector(onTap:t,child:Container(width:double.infinity,padding:const EdgeInsets.symmetric(vertical:16),decoration:BoxDecoration(borderRadius:BorderRadius.circular(18),border:Border.all(color:Pal.ts.withOpacity(0.4))),child:Text(l,textAlign:TextAlign.center,style:const TextStyle(color:Pal.ts,fontSize:16,fontWeight:FontWeight.w700))));
 PageRouteBuilder _slide(Widget p)=>PageRouteBuilder(pageBuilder:(_,__,___)=>p,transitionsBuilder:(_,a,__,child)=>SlideTransition(position:Tween(begin:const Offset(1,0),end:Offset.zero).animate(CurvedAnimation(parent:a,curve:Curves.easeOutCubic)),child:child),transitionDuration:const Duration(milliseconds:350));
+
+// אנימציית מעבר לשלב הבא — זום פנימה + פייד
+PageRouteBuilder _levelAdvanceRoute(Widget p) => PageRouteBuilder(
+  pageBuilder: (_, __, ___) => p,
+  transitionDuration: const Duration(milliseconds: 550),
+  reverseTransitionDuration: const Duration(milliseconds: 300),
+  transitionsBuilder: (_, animation, __, child) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeInOutCubic);
+    return FadeTransition(
+      opacity: curved,
+      child: ScaleTransition(
+        scale: Tween(begin: 1.15, end: 1.0).animate(curved),
+        child: child,
+      ),
+    );
+  },
+);

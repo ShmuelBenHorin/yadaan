@@ -61,6 +61,22 @@ class Sfx {
     }
   }
 
+  // 🚀 עליית שלב — ארפג'יו עולה חגיגי
+  static Future<void> levelUp() async {
+    if (muted) return;
+    playWebTone([
+      {'freq': 523,  'dur': 0.13, 'vol': 0.52, 'type': 'sine', 'attack': 0.005},
+      {'freq': 659,  'dur': 0.13, 'vol': 0.52, 'type': 'sine', 'attack': 0.005},
+      {'freq': 784,  'dur': 0.13, 'vol': 0.52, 'type': 'sine', 'attack': 0.005},
+      {'freq': 1047, 'dur': 0.70, 'vol': 0.60, 'type': 'sine', 'attack': 0.010},
+    ]);
+    if (!kIsWeb) {
+      await HapticFeedback.mediumImpact();
+      await Future.delayed(const Duration(milliseconds: 180));
+      await HapticFeedback.lightImpact();
+    }
+  }
+
   // 💀 נכשלת — שלושה "dunk" יורדים, כמו Duolingo כשמפסידים streak
   static Future<void> fail() async {
     if (muted) return;
