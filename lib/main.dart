@@ -1524,17 +1524,45 @@ class _SeasonalBanner extends StatelessWidget {
 // ═══════════════════════════════════════════════
 class _SeasonalLevelsScreen extends StatefulWidget {
   final SeasonalEvent event;
-  const _SeasonalLevelsScreen({required this.event});
+  final int? highlightLevel;
+  const _SeasonalLevelsScreen({required this.event, this.highlightLevel});
   @override State<_SeasonalLevelsScreen> createState() => _SeasonalLevelsScreenState();
 }
-class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen> with RouteAware {
-  // stars[i] = כוכבים שהושגו בשלב i (0 = לא שוחק)
+class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
+    with RouteAware, SingleTickerProviderStateMixin {
   List<int> _stars = [];
+  final ScrollController _scroll = ScrollController();
+  late final AnimationController _ballCtrl;
+  bool _didScroll = false;
 
   @override void initState() {
     super.initState();
     _stars = List.filled(widget.event.levelCount, 0);
+    _ballCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+      ..addListener(() => setState(() {}));
     _loadProgress();
+  }
+
+  @override void dispose() {
+    _scroll.dispose();
+    _ballCtrl.dispose();
+    super.dispose();
+  }
+
+  void _scrollToHighlight(double viewportH) {
+    if (_didScroll || widget.highlightLevel == null) return;
+    _didScroll = true;
+    final lvl = widget.highlightLevel!;
+    final targetOffset = (lvl * _kRowH - viewportH / 2 + _kNodeR)
+        .clamp(0.0, _scroll.hasClients ? _scroll.position.maxScrollExtent : 9999.0);
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(targetOffset,
+          duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
+      Future.delayed(const Duration(milliseconds: 700), () {
+        if (mounted) _ballCtrl.forward();
+      });
+    });
   }
 
   Future<void> _loadProgress() async {
@@ -1588,20 +1616,30 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen> with Route
                   minHeight: 6))),
             Expanded(child: LayoutBuilder(builder: (ctx, cstr) {
               final w = cstr.maxWidth;
+              final viewH = cstr.maxHeight;
               final mapH = count * _kRowH + _kPadV * 2;
               final positions = List.generate(count, (i) => Offset(_lvlX(i, w), mapH - _kPadV - i * _kRowH));
+              WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToHighlight(viewH));
+              final ballFrom = widget.highlightLevel != null && widget.highlightLevel! > 0
+                  ? widget.highlightLevel! - 1 : null;
+              final ballProg = CurvedAnimation(parent: _ballCtrl, curve: Curves.easeInOut).value;
               return SingleChildScrollView(
+                controller: _scroll,
                 reverse: true,
                 child: SizedBox(width: w, height: mapH,
                   child: Stack(clipBehavior: Clip.none, children: [
                     Positioned.fill(child: CustomPaint(
-                      painter: _SeasonalTrailPainter(positions: positions, count: count, color: color))),
+                      painter: _SeasonalTrailPainter(
+                        positions: positions, count: count, color: color,
+                        stars: _stars,
+                        ballFromIdx: ballFrom,
+                        ballProgress: ballProg,
+                      ))),
                     ...List.generate(count, (i) {
                       final p = positions[i];
                       final unlocked = _isUnlocked(i);
-                      // השלב הבא לשחק = השלב הראשון שלא הושלם
-                      final isNext = unlocked && (i == 0 || _stars[i] == 0) &&
-                          (i == 0 || _stars[i - 1] > 0);
+                      final isNext = (unlocked && (i == 0 || _stars[i] == 0) &&
+                          (i == 0 || _stars[i - 1] > 0)) || widget.highlightLevel == i;
                       return Positioned(
                         left: p.dx - 40, top: p.dy - 55,
                         child: _SeasonalTrailNode(
@@ -1624,7 +1662,6 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen> with Route
                               isSeasonal: true,
                               seasonalEventId: event.id,
                             )));
-                            // רענן התקדמות בחזרה מהמשחק
                             _loadProgress();
                           },
                         ));
@@ -1636,29 +1673,86 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen> with Route
   }
 }
 
-// ── Seasonal trail painter — always unlocked (event color) ──
+// ── Seasonal trail painter ───────────────────────────────────
 class _SeasonalTrailPainter extends CustomPainter {
   final List<Offset> positions;
   final int count;
   final Color color;
-  const _SeasonalTrailPainter({required this.positions, required this.count, required this.color});
+  final List<int> stars;       // stars[i] > 0 = completed
+  final int? ballFromIdx;
+  final double ballProgress;
+  const _SeasonalTrailPainter({
+    required this.positions, required this.count, required this.color,
+    this.stars = const [], this.ballFromIdx, this.ballProgress = 0.0});
+
+  static Offset _bezierPt(Offset a, Offset b, double t) {
+    final dy = a.dy - b.dy;
+    final cp1 = Offset(a.dx, a.dy - dy * 0.45);
+    final cp2 = Offset(b.dx, b.dy + dy * 0.45);
+    final u = 1 - t;
+    return Offset(
+      u*u*u*a.dx + 3*u*u*t*cp1.dx + 3*u*t*t*cp2.dx + t*t*t*b.dx,
+      u*u*u*a.dy + 3*u*u*t*cp1.dy + 3*u*t*t*cp2.dy + t*t*t*b.dy,
+    );
+  }
+
   @override void paint(Canvas canvas, Size size) {
     for (int i = 0; i < count - 1; i++) {
       final a = positions[i], b = positions[i + 1];
+      final completed = stars.length > i && stars[i] > 0;
       final dy = a.dy - b.dy;
       final path = Path()..moveTo(a.dx, a.dy)
         ..cubicTo(a.dx, a.dy - dy * 0.45, b.dx, b.dy + dy * 0.45, b.dx, b.dy);
-      canvas.drawPath(path, Paint()..color = color.withOpacity(0.12)..strokeWidth = 22
-        ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+      if (completed) {
+        canvas.drawPath(path, Paint()..color = color.withOpacity(0.12)..strokeWidth = 22
+          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+        canvas.drawPath(path, Paint()..color = color.withOpacity(0.28)..strokeWidth = 9
+          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+        canvas.drawPath(path, Paint()..color = color.withOpacity(0.90)..strokeWidth = 3.5
+          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+      } else {
+        // מסלול הבא — קו עדין
+        canvas.drawPath(path, Paint()..color = color.withOpacity(0.08)..strokeWidth = 12
+          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+        canvas.drawPath(path, Paint()..color = color.withOpacity(0.20)..strokeWidth = 3
+          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+      }
+    }
+
+    // ── כדור אנימציה ──
+    if (ballFromIdx != null && ballProgress > 0 && ballFromIdx! + 1 < positions.length) {
+      const nodeCenter = Offset(0, 5);
+      final a = positions[ballFromIdx!] + nodeCenter;
+      final b = positions[ballFromIdx! + 1] + nodeCenter;
+      final pos = _bezierPt(a, b, ballProgress);
+
+      const trailSteps = 8;
+      for (int s = 0; s < trailSteps; s++) {
+        final tBack = (ballProgress - s * 0.04).clamp(0.0, 1.0);
+        if (tBack <= 0) break;
+        final trailPos = _bezierPt(a, b, tBack);
+        final opacity = (1.0 - s / trailSteps) * 0.4;
+        canvas.drawCircle(trailPos, 9.0 * (1.0 - s / trailSteps), Paint()
+          ..color = Colors.white.withOpacity(opacity)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      }
+      canvas.drawCircle(pos, 22, Paint()
+        ..color = color.withOpacity(0.18)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
-      canvas.drawPath(path, Paint()..color = color.withOpacity(0.28)..strokeWidth = 9
-        ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
-      canvas.drawPath(path, Paint()..color = color.withOpacity(0.90)..strokeWidth = 3.5
-        ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+      canvas.drawCircle(pos, 14, Paint()
+        ..color = color.withOpacity(0.40)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+      canvas.drawCircle(pos, 10, Paint()..color = const Color(0xFF00FF88));
+      canvas.drawCircle(pos, 4, Paint()..color = Colors.white);
     }
   }
-  @override bool shouldRepaint(_SeasonalTrailPainter old) => old.color != color || old.count != count;
+  @override bool shouldRepaint(_SeasonalTrailPainter old) =>
+    old.color != color || old.count != count ||
+    old.ballProgress != ballProgress || old.ballFromIdx != ballFromIdx ||
+    old.stars != stars;
 }
 
 // ── Seasonal trail node ──────────────────────────────────────
@@ -2131,8 +2225,10 @@ class _TrailPainter extends CustomPainter {
 
     // ── כדור אנימציה ────────────────────────────────
     if (ballFromIdx != null && ballProgress > 0 && ballFromIdx! + 1 < positions.length) {
-      final a = positions[ballFromIdx!];
-      final b = positions[ballFromIdx! + 1];
+      // מרכז העיגול הוויזואלי = +5px ב-Y (26 label + 4 gap + 30 radius - 55 offset)
+      const nodeCenter = Offset(0, 5);
+      final a = positions[ballFromIdx!] + nodeCenter;
+      final b = positions[ballFromIdx! + 1] + nodeCenter;
       final pos = _bezierPt(a, b, ballProgress);
 
       // זנב מהול (trail)
@@ -2946,8 +3042,18 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
                   widget.isSeasonal ? '⚽  חזרה לשלבים' : '🗺️  מפת שלבים',
                   () {
                     if (widget.isSeasonal) {
-                      // חזרה למסך שלבי המונדיאל
-                      Navigator.popUntil(context, (r) => r.isFirst);
+                      // חזרה למסך שלבי המונדיאל עם הדגשת השלב הבא
+                      final events = SeasonalService.instance.activeEvents;
+                      final event = events.firstWhere(
+                        (e) => e.id == widget.seasonalEventId,
+                        orElse: () => events.first);
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        _levelAdvanceRoute(_SeasonalLevelsScreen(
+                          event: event,
+                          highlightLevel: widget.levelIndex + 1 < event.levelCount
+                              ? widget.levelIndex + 1 : widget.levelIndex)),
+                        (r) => r.isFirst);
                     } else {
                       // חזרה למפת השלבים של הרמה הנוכחית
                       Navigator.pushAndRemoveUntil(
