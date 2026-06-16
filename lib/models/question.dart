@@ -67,18 +67,28 @@ class QRepo {
 
   static List<Question> forLevel(int idx, Diff d) {
     final all = forDiff(d);
-    // סנן שאלות שכבר נענו נכון
-    var unseen = all.where((q) => !(_seen[d]?.contains(q.id) ?? false)).toList();
-    if (unseen.length < Cfg.questionsPerLevel) {
-      _seen[d] = {};
-      SharedPreferences.getInstance().then((p) => p.remove('seen_${d.name}'));
-      unseen = List<Question>.from(all);
-    }
+    final n   = Cfg.questionsPerLevel;
+
+    // ── חלוקה קבועה לפי שלב ──────────────────────────────────────
+    // כל שלב מקבל 8 שאלות משלו — ללא חפיפה עם שאלות שלב אחר.
+    // שאלה שנענתה נכון בשלב 3 לא נעלמת ממאגר שלב 7.
+    final count = max(1, (all.length / n).floor());
+    final safeIdx = idx % count;
+    final start   = safeIdx * n;
+    final end     = (start + n).clamp(0, all.length);
+    final partition = List<Question>.from(all.sublist(start, end));
+
+    // ── unseen קודם, seen אחר (recycled) ─────────────────────────
+    final seen = _seen[d] ?? {};
+    var unseen  = partition.where((q) => !seen.contains(q.id)).toList();
+    final recycled = partition.where((q) => seen.contains(q.id)).toList();
+    // אם כל השאלות בשלב כבר נענו נכון — מחזירים אותן (השלב תמיד ניתן לשחק)
+    if (unseen.isEmpty) unseen = recycled;
 
     final interests = InterestsService.instance;
-
-    // בנה pool לפי קטגוריה
     final rng = Random();
+
+    // ── סינון לפי עניין (70% מועדף / 30% אחר) ───────────────────
     final Map<String, List<Question>> liked = {};
     final Map<String, List<Question>> other = {};
     for (final q in unseen) {
@@ -88,10 +98,9 @@ class QRepo {
         other.putIfAbsent(q.category, () => []).add(q);
       }
     }
-    for (final l in liked.values) { l.shuffle(); }
-    for (final l in other.values) { l.shuffle(); }
+    for (final l in liked.values) { l.shuffle(rng); }
+    for (final l in other.values) { l.shuffle(rng); }
 
-    // לכל שאלה — בחר קטגוריה קודם (70% אהובה / 30% אחרת), אז שאלה ממנה
     Question? _pick(Map<String, List<Question>> pool, Set<String> used) {
       final avail = pool.entries.where((e) => e.value.any((q) => !used.contains(q.id))).toList();
       if (avail.isEmpty) return null;
@@ -100,18 +109,18 @@ class QRepo {
     }
 
     final result = <Question>[];
-    final used = <String>{};
-    for (int i = 0; i < Cfg.questionsPerLevel; i++) {
+    final used   = <String>{};
+    for (int i = 0; i < n; i++) {
       final fromLiked = rng.nextDouble() < 0.7 && liked.isNotEmpty;
       final q = fromLiked
           ? (_pick(liked, used) ?? _pick(other, used))
           : (_pick(other, used) ?? _pick(liked, used));
       if (q != null) { result.add(q); used.add(q.id); }
     }
-    // השלם אם חסר
-    if (result.length < Cfg.questionsPerLevel) {
-      final rem = unseen.where((q) => !used.contains(q.id)).toList()..shuffle();
-      result.addAll(rem.take(Cfg.questionsPerLevel - result.length));
+    // השלם מ-recycled אם נדרש (מצב שכל 8 שאלות כבר נענו נכון)
+    if (result.length < n) {
+      final rem = recycled.where((q) => !used.contains(q.id)).toList()..shuffle(rng);
+      result.addAll(rem.take(n - result.length));
     }
     return result;
   }
