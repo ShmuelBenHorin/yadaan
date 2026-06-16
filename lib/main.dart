@@ -1854,19 +1854,41 @@ double _lvlX(int idx, double w) {
   return w * f[idx % f.length];
 }
 
-class LevelMapScreen extends StatelessWidget {
+class LevelMapScreen extends StatefulWidget {
   final Diff diff;
-  const LevelMapScreen({super.key,required this.diff});
+  final int? highlightLevel; // אם מגיעים מסיום שלב — מודגש השלב הבא
+  const LevelMapScreen({super.key,required this.diff,this.highlightLevel});
+  @override State<LevelMapScreen> createState()=>_LevelMapScreenState();
+}
+class _LevelMapScreenState extends State<LevelMapScreen> {
+  final ScrollController _scroll = ScrollController();
+  bool _didScroll = false;
+
+  @override void dispose(){ _scroll.dispose(); super.dispose(); }
+
+  void _scrollToHighlight(double mapH, double viewportH) {
+    if (_didScroll || widget.highlightLevel == null) return;
+    _didScroll = true;
+    final lvl = widget.highlightLevel!;
+    // reverse:true => offset 0 = bottom (level 0). Level N is N*_kRowH from bottom.
+    final targetOffset = (lvl * _kRowH - viewportH / 2 + _kNodeR).clamp(0.0, _scroll.position.maxScrollExtent);
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(targetOffset, duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
+      }
+    });
+  }
+
   @override Widget build(BuildContext context){
     return ListenableBuilder(listenable:LevelService.instance,builder:(_,__){
       final ls=LevelService.instance;
-      final count=QRepo.levelCount(diff);
-      final earned=ls.totalStars(diff);
+      final count=QRepo.levelCount(widget.diff);
+      final earned=ls.totalStars(widget.diff);
       final maxS=count*Cfg.starsPerLevel;
-      final nextDiff=diff==Diff.easy?Diff.medium:diff==Diff.medium?Diff.hard:null;
+      final nextDiff=widget.diff==Diff.easy?Diff.medium:widget.diff==Diff.medium?Diff.hard:null;
       final nextUnlocked=nextDiff!=null&&ls.isDiffUnlocked(nextDiff);
       int nextIdx=-1;
-      for(int i=0;i<count;i++){if(ls.isLevelUnlocked(diff,i)&&ls.starsFor(diff,i)==0){nextIdx=i;break;}}
+      for(int i=0;i<count;i++){if(ls.isLevelUnlocked(widget.diff,i)&&ls.starsFor(widget.diff,i)==0){nextIdx=i;break;}}
       return Scaffold(backgroundColor:const Color(0xFF060A1A),body:Stack(children:[
         const _MountainBg(),
         SafeArea(child:Column(children:[
@@ -1875,7 +1897,7 @@ class LevelMapScreen extends StatelessWidget {
               _iconBtn(Icons.arrow_back,()=>Navigator.pop(context)),
               const SizedBox(width:12),
               Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Text(diff.label,style:TextStyle(color:diff.color,fontSize:22,fontWeight:FontWeight.w800)),
+                Text(widget.diff.label,style:TextStyle(color:widget.diff.color,fontSize:22,fontWeight:FontWeight.w800)),
                 Text('$earned / $maxS ⭐',style:const TextStyle(color:Pal.ts,fontSize:11)),
               ]),
               const Spacer(),
@@ -1884,39 +1906,43 @@ class LevelMapScreen extends StatelessWidget {
           Padding(padding:const EdgeInsets.fromLTRB(20,8,20,0),
             child:ClipRRect(borderRadius:BorderRadius.circular(6),
               child:LinearProgressIndicator(value:maxS>0?earned/maxS:0,
-                backgroundColor:Pal.card,valueColor:AlwaysStoppedAnimation(diff.color),minHeight:6))),
+                backgroundColor:Pal.card,valueColor:AlwaysStoppedAnimation(widget.diff.color),minHeight:6))),
           Expanded(child:LayoutBuilder(builder:(ctx,cstr){
             final w=cstr.maxWidth;
+            final viewH=cstr.maxHeight;
             final extra=nextDiff!=null?90.0:0.0;
             final mapH=count*_kRowH+_kPadV*2+extra;
             final positions=List.generate(count,(i)=>Offset(_lvlX(i,w),mapH-_kPadV-i*_kRowH));
+            WidgetsBinding.instance.addPostFrameCallback((_)=>_scrollToHighlight(mapH,viewH));
             return SingleChildScrollView(
+              controller:_scroll,
               reverse:true,
               child:SizedBox(width:w,height:mapH,
                 child:Stack(clipBehavior:Clip.none,children:[
                   Positioned.fill(child:CustomPaint(
-                    painter:_TrailPainter(positions:positions,count:count,ls:ls,diff:diff))),
+                    painter:_TrailPainter(positions:positions,count:count,ls:ls,diff:widget.diff))),
                   ...List.generate(count,(i){
                     final p=positions[i];
+                    final isHighlighted = widget.highlightLevel == i;
                     return Positioned(
                       left:p.dx-40,top:p.dy-55,
                       child:_TrailNode(
-                        diff:diff,index:i,
-                        unlocked:ls.isLevelUnlocked(diff,i),
-                        stars:ls.starsFor(diff,i),
-                        perfect:ls.starsFor(diff,i)==Cfg.starsPerLevel,
-                        isNext:i==nextIdx,
-                        lockLabel:(!ls.isLevelUnlocked(diff,i)&&i>0&&i%Cfg.segmentSize==0)?ls.segmentProgress(diff,i):"",
+                        diff:widget.diff,index:i,
+                        unlocked:ls.isLevelUnlocked(widget.diff,i),
+                        stars:ls.starsFor(widget.diff,i),
+                        perfect:ls.starsFor(widget.diff,i)==Cfg.starsPerLevel,
+                        isNext:i==nextIdx || isHighlighted,
+                        lockLabel:(!ls.isLevelUnlocked(widget.diff,i)&&i>0&&i%Cfg.segmentSize==0)?ls.segmentProgress(widget.diff,i):"",
                         onTap:(){
-                          if(!ls.isLevelUnlocked(diff,i))return;
+                          if(!ls.isLevelUnlocked(widget.diff,i))return;
                           if(!EnergyService.instance.has){Navigator.push(ctx,_slide(const NoEnergyScreen()));return;}
                           EnergyService.instance.spend(Cfg.energyCostWrong);
-                          Navigator.push(ctx,_slide(GameScreen(diff:diff,levelIndex:i)));
+                          Navigator.push(ctx,_slide(GameScreen(diff:widget.diff,levelIndex:i)));
                         }));
                   }),
                   if(nextDiff!=null)Positioned(
                     top:16,left:w*0.5-100,width:200,
-                    child:_DiffTransitionNode(nextDiff:nextDiff,unlocked:nextUnlocked,currentDiff:diff)),
+                    child:_DiffTransitionNode(nextDiff:nextDiff,unlocked:nextUnlocked,currentDiff:widget.diff)),
                 ])));
           })),
         ])),
@@ -2807,10 +2833,10 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
               child: Column(children: [
                 if (!widget.isSeasonal && _canNext) ...[
                   _bigBtn('השלב הבא ▶', widget.diff.color, () {
-                    if(!EnergyService.instance.has){Navigator.push(context,_slide(const NoEnergyScreen()));return;}
-                    EnergyService.instance.spend(Cfg.energyCostWrong);
-                    Navigator.pushReplacement(context, _levelAdvanceRoute(GameScreen(
-                      diff: widget.diff, levelIndex: widget.levelIndex + 1)));
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      _levelAdvanceRoute(LevelMapScreen(diff: widget.diff, highlightLevel: widget.levelIndex + 1)),
+                      (r) => r.isFirst);
                   }),
                   const SizedBox(height: 14),
                 ],
