@@ -139,9 +139,12 @@ class GameState extends ChangeNotifier {
   Future<void> _finish() async {
     _t?.cancel();
     if(_stars==Cfg.starsPerLevel)await Sfx.perfect();
-    await LevelService.instance.save(diff,levelIdx,_stars);
-    ICloudKV.saveAll(); // גיבוי רקע ל-iCloud
-    if (defaultTargetPlatform == TargetPlatform.android) CloudSyncService.instance.saveProgress();
+    if(!isSeasonal){
+      // שלבים עונתיים לא שומרים ב-LevelService (מונע זיהום שלבים רגילים)
+      await LevelService.instance.save(diff,levelIdx,_stars);
+      ICloudKV.saveAll();
+      if (defaultTargetPlatform == TargetPlatform.android) CloudSyncService.instance.saveProgress();
+    }
     _phase=Phase.complete;
     notifyListeners();
   }
@@ -1505,6 +1508,7 @@ class _SeasonalBanner extends StatelessWidget {
               style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
             const SizedBox(height: 2),
             Text('${event.levelCount} שלבים · ${event.questions.length} שאלות',
+              textDirection: TextDirection.rtl,
               style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12)),
           ])),
           const SizedBox(width: 8),
@@ -1569,6 +1573,7 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen> with Route
                   Text(event.title,
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
                   Text('$_completedCount / $count שלבים',
+                    textDirection: TextDirection.rtl,
                     style: const TextStyle(color: Pal.ts, fontSize: 11)),
                 ]),
               ])),
@@ -2234,7 +2239,7 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
       if(widget.seasonalEventId!=null){
         SharedPreferences.getInstance().then((p)=>p.setInt('seasonal_${widget.seasonalEventId}_${widget.levelIndex}',_gs.stars));
       }
-      Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});
+      Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars,isSeasonal:widget.isSeasonal)));});
     }
     if(_gs.phase==Phase.failed&&!_exiting){final fq=_gs.failedQuestions;_exiting=true;Analytics.levelFailed(diff:widget.diff.name,levelIndex:widget.levelIndex);Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex,failedQuestions:fq)));});}
   }
@@ -2600,7 +2605,8 @@ class _IBSState extends State<_InterestBottomSheet> {
 // ═══════════════════════════════════════════════
 class CompleteScreen extends StatefulWidget {
   final Diff diff; final int levelIndex,stars;
-  const CompleteScreen({super.key,required this.diff,required this.levelIndex,required this.stars});
+  final bool isSeasonal;
+  const CompleteScreen({super.key,required this.diff,required this.levelIndex,required this.stars,this.isSeasonal=false});
   @override State<CompleteScreen> createState()=>_CS();
 }
 class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
@@ -2792,7 +2798,7 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeOut,
               child: Column(children: [
-                if (_canNext) ...[
+                if (!widget.isSeasonal && _canNext) ...[
                   _bigBtn('השלב הבא ▶', widget.diff.color, () {
                     if(!EnergyService.instance.has){Navigator.push(context,_slide(const NoEnergyScreen()));return;}
                     EnergyService.instance.spend(Cfg.energyCostWrong);
@@ -2801,7 +2807,7 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
                   }),
                   const SizedBox(height: 14),
                 ],
-                _outBtn('🗺️  מפת שלבים', () =>
+                _outBtn(widget.isSeasonal ? '⚽  חזרה לשלבים' : '🗺️  מפת שלבים', () =>
                   Navigator.popUntil(context, (r) => r.isFirst)),
               ]))),
         ])))),
