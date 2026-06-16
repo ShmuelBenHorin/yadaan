@@ -1860,22 +1860,36 @@ class LevelMapScreen extends StatefulWidget {
   const LevelMapScreen({super.key,required this.diff,this.highlightLevel});
   @override State<LevelMapScreen> createState()=>_LevelMapScreenState();
 }
-class _LevelMapScreenState extends State<LevelMapScreen> {
+class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProviderStateMixin {
   final ScrollController _scroll = ScrollController();
+  late final AnimationController _ballCtrl;
   bool _didScroll = false;
 
-  @override void dispose(){ _scroll.dispose(); super.dispose(); }
+  @override void initState() {
+    super.initState();
+    _ballCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+      ..addListener(() => setState(() {}));
+  }
+
+  @override void dispose() {
+    _scroll.dispose();
+    _ballCtrl.dispose();
+    super.dispose();
+  }
 
   void _scrollToHighlight(double mapH, double viewportH) {
     if (_didScroll || widget.highlightLevel == null) return;
     _didScroll = true;
     final lvl = widget.highlightLevel!;
-    // reverse:true => offset 0 = bottom (level 0). Level N is N*_kRowH from bottom.
     final targetOffset = (lvl * _kRowH - viewportH / 2 + _kNodeR).clamp(0.0, _scroll.position.maxScrollExtent);
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (_scroll.hasClients) {
-        _scroll.animateTo(targetOffset, duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
-      }
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(targetOffset,
+          duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
+      // אחרי שהמסך הסתדר — הפעל את כדור האנימציה
+      Future.delayed(const Duration(milliseconds: 700), () {
+        if (mounted) _ballCtrl.forward();
+      });
     });
   }
 
@@ -1920,7 +1934,12 @@ class _LevelMapScreenState extends State<LevelMapScreen> {
               child:SizedBox(width:w,height:mapH,
                 child:Stack(clipBehavior:Clip.none,children:[
                   Positioned.fill(child:CustomPaint(
-                    painter:_TrailPainter(positions:positions,count:count,ls:ls,diff:widget.diff))),
+                    painter:_TrailPainter(
+                      positions:positions,count:count,ls:ls,diff:widget.diff,
+                      ballFromIdx: widget.highlightLevel != null && widget.highlightLevel! > 0
+                          ? widget.highlightLevel! - 1 : null,
+                      ballProgress: CurvedAnimation(parent:_ballCtrl,curve:Curves.easeInOut).value,
+                    ))),
                   ...List.generate(count,(i){
                     final p=positions[i];
                     final isHighlighted = widget.highlightLevel == i;
@@ -2029,42 +2048,125 @@ class _TrailPainter extends CustomPainter {
   final int count;
   final LevelService ls;
   final Diff diff;
-  _TrailPainter({required this.positions,required this.count,required this.ls,required this.diff});
-  @override void paint(Canvas canvas,Size size){
-    for(int i=0;i<count-1;i++){
-      final a=positions[i],b=positions[i+1];
-      final unlocked=ls.isLevelUnlocked(diff,i);
-      // S-curve bezier between nodes
-      final dy=a.dy-b.dy;
-      final path=Path()..moveTo(a.dx,a.dy)
-        ..cubicTo(a.dx,a.dy-dy*0.45,b.dx,b.dy+dy*0.45,b.dx,b.dy);
-      if(unlocked){
-        canvas.drawPath(path,Paint()..color=diff.color.withOpacity(0.12)..strokeWidth=22
-          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round
-          ..maskFilter=const MaskFilter.blur(BlurStyle.normal,12));
-        canvas.drawPath(path,Paint()..color=diff.color.withOpacity(0.28)..strokeWidth=9
-          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round
-          ..maskFilter=const MaskFilter.blur(BlurStyle.normal,5));
-        canvas.drawPath(path,Paint()..color=diff.color.withOpacity(0.90)..strokeWidth=3.5
-          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round);
-      }else{
-        // Dashed locked path
-        final tot=(b-a).distance;
-        final dir=(b-a)/tot;
-        double d=0;bool on=true;
-        final p=Paint()..color=Pal.ts.withOpacity(0.22)..strokeWidth=2
-          ..style=PaintingStyle.stroke..strokeCap=StrokeCap.round;
-        while(d<tot){
-          final seg=on?9.0:5.0;
-          final end=min(d+seg,tot);
-          if(on)canvas.drawLine(a+dir*d,a+dir*end,p);
-          d=end;on=!on;
+  final int? ballFromIdx;
+  final double ballProgress;
+  _TrailPainter({required this.positions,required this.count,required this.ls,required this.diff,
+    this.ballFromIdx, this.ballProgress = 0.0});
+
+  // נקודה על עקומת בזייר קובית בזמן t ∈ [0,1]
+  static Offset _bezierPt(Offset a, Offset b, double t) {
+    final dy = a.dy - b.dy;
+    final cp1 = Offset(a.dx, a.dy - dy * 0.45);
+    final cp2 = Offset(b.dx, b.dy + dy * 0.45);
+    final u = 1 - t;
+    return Offset(
+      u*u*u*a.dx + 3*u*u*t*cp1.dx + 3*u*t*t*cp2.dx + t*t*t*b.dx,
+      u*u*u*a.dy + 3*u*u*t*cp1.dy + 3*u*t*t*cp2.dy + t*t*t*b.dy,
+    );
+  }
+
+  // ציור מסלול (בזייר) בין שתי נקודות
+  Path _segmentPath(Offset a, Offset b) {
+    final dy = a.dy - b.dy;
+    return Path()..moveTo(a.dx, a.dy)
+      ..cubicTo(a.dx, a.dy - dy*0.45, b.dx, b.dy + dy*0.45, b.dx, b.dy);
+  }
+
+  @override void paint(Canvas canvas, Size size) {
+    // מצא את הנעול הראשון — נציג קו מקוקו רק עד השלב הזה
+    int firstLocked = count;
+    for (int i = 0; i < count; i++) {
+      if (!ls.isLevelUnlocked(diff, i)) { firstLocked = i; break; }
+    }
+
+    for (int i = 0; i < count - 1; i++) {
+      final a = positions[i], b = positions[i + 1];
+      final segUnlocked = ls.isLevelUnlocked(diff, i) && ls.isLevelUnlocked(diff, i + 1);
+
+      if (!segUnlocked) {
+        // קו מקוקו עדין רק לגזרה הנעולה הראשונה
+        if (i != firstLocked - 1) continue;
+        // ציור מקוקו על גבי הבזייר (לא קו ישר)
+        final path = _segmentPath(a, b);
+        final pm = Paint()
+          ..color = Pal.ts.withOpacity(0.18)
+          ..strokeWidth = 2.5
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round;
+        // דמות מקוקו: דגימת נקודות על הבזייר
+        const steps = 40;
+        bool on = true;
+        Offset? prev;
+        for (int s = 0; s <= steps; s++) {
+          final pt = _bezierPt(a, b, s / steps);
+          if (s % 4 == 0) on = !on;
+          if (on && prev != null) canvas.drawLine(prev, pt, pm);
+          prev = pt;
         }
+        continue;
       }
+
+      final path = _segmentPath(a, b);
+      // שכבה 1: זוהר רחב
+      canvas.drawPath(path, Paint()
+        ..color = diff.color.withOpacity(0.10)
+        ..strokeWidth = 28
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14));
+      // שכבה 2: זוהר בינוני
+      canvas.drawPath(path, Paint()
+        ..color = diff.color.withOpacity(0.25)
+        ..strokeWidth = 10
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+      // שכבה 3: קו ברור
+      canvas.drawPath(path, Paint()
+        ..color = diff.color.withOpacity(0.85)
+        ..strokeWidth = 4
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round);
+    }
+
+    // ── כדור אנימציה ────────────────────────────────
+    if (ballFromIdx != null && ballProgress > 0 && ballFromIdx! + 1 < positions.length) {
+      final a = positions[ballFromIdx!];
+      final b = positions[ballFromIdx! + 1];
+      final pos = _bezierPt(a, b, ballProgress);
+
+      // זנב מהול (trail)
+      const trailSteps = 8;
+      for (int s = 0; s < trailSteps; s++) {
+        final tBack = (ballProgress - s * 0.04).clamp(0.0, 1.0);
+        if (tBack <= 0) break;
+        final trailPos = _bezierPt(a, b, tBack);
+        final opacity = (1.0 - s / trailSteps) * 0.4;
+        canvas.drawCircle(trailPos, 9.0 * (1.0 - s / trailSteps), Paint()
+          ..color = Colors.white.withOpacity(opacity)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      }
+
+      // הילה חיצונית
+      canvas.drawCircle(pos, 22, Paint()
+        ..color = Colors.white.withOpacity(0.15)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+      // הילה בינונית
+      canvas.drawCircle(pos, 14, Paint()
+        ..color = Colors.white.withOpacity(0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+      // כדור ירוק עז
+      canvas.drawCircle(pos, 10, Paint()
+        ..color = const Color(0xFF00FF88));
+      // נקודת ניצוץ במרכז
+      canvas.drawCircle(pos, 4, Paint()
+        ..color = Colors.white);
     }
   }
-  @override bool shouldRepaint(_TrailPainter old)=>
-    old.count!=count||old.diff!=diff||old.positions!=positions;
+
+  @override bool shouldRepaint(_TrailPainter old) =>
+    old.count != count || old.diff != diff || old.positions != positions ||
+    old.ballProgress != ballProgress || old.ballFromIdx != ballFromIdx;
 }
 
 // ── Trail node widget ───────────────────────────────
