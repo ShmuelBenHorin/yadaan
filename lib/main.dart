@@ -49,25 +49,26 @@ class GameState extends ChangeNotifier {
   GameState({required this.levelIdx,required this.diff,List<Question>? retryWith,this.isSeasonal=false}){
     if(retryWith==null) Analytics.levelStarted();
     if(retryWith!=null){
-      if(isSeasonal){
-        // שלב עונתי — רק השאלות שנשלחו, ללא השלמה מ-QRepo
-        _queue=List<Question>.from(retryWith);
-      } else {
-        // חזרה אחרי כישלון — שאלות שנכשלו + השלמה עד questionsPerLevel
-        final failedIds=retryWith.map((q)=>q.id).toSet();
-        final fresh=QRepo.forLevel(levelIdx,diff).where((q)=>!failedIds.contains(q.id)).toList();
-        final needed=(Cfg.questionsPerLevel-retryWith.length).clamp(0,Cfg.questionsPerLevel);
-        _queue=[...retryWith,...fresh.take(needed)];
-      }
+      // חזרה אחרי כישלון — רק השאלות שנכשלו, ללא השלמה מהמאגר
+      // (השלמה שורפת שאלות חדשות ומדלדלת את המאגר)
+      _queue=List<Question>.from(retryWith);
     } else {
       _queue=List<Question>.from(QRepo.forLevel(levelIdx,diff));
     }
     _originalTotal=_queue.length;
+    // שלב שלוט לגמרי (כל 8 שאלות נענו נכון) — סיים מיידית עם 3 כוכבים
+    if(_queue.isEmpty){
+      _phase=Phase.complete;
+      _stars=Cfg.starsPerLevel;
+      LevelService.instance.save(diff,levelIdx,Cfg.starsPerLevel);
+      return;
+    }
     _startTimer();
   }
   int get stars=>_stars; int? get sel=>_sel; bool get fb=>_fb;
   bool get waitingContinue=>_waitingContinue;
-  Phase get phase=>_phase; int get timer=>_timer; Question get cur=>_queue[0];
+  Phase get phase=>_phase; int get timer=>_timer;
+  Question get cur=>_queue.isNotEmpty?_queue[0]:const Question(id:'',category:'',diff:Diff.easy,q:'',a:[],c:0);
   int get total=>_originalTotal;
   int get qi=>_answeredCorrect;
   double get prog=>_originalTotal==0?1.0:_answeredCorrect/_originalTotal;

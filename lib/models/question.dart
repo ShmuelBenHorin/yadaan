@@ -78,12 +78,11 @@ class QRepo {
     final end     = (start + n).clamp(0, all.length);
     final partition = List<Question>.from(all.sublist(start, end));
 
-    // ── unseen קודם, seen אחר (recycled) ─────────────────────────
-    final seen = _seen[d] ?? {};
-    var unseen  = partition.where((q) => !seen.contains(q.id)).toList();
-    final recycled = partition.where((q) => seen.contains(q.id)).toList();
-    // אם כל השאלות בשלב כבר נענו נכון — מחזירים אותן (השלב תמיד ניתן לשחק)
-    if (unseen.isEmpty) unseen = recycled;
+    // ── רק unseen — שאלות שנענו נכון לא מוצגות שוב ────────────────
+    final seen   = _seen[d] ?? {};
+    final unseen = partition.where((q) => !seen.contains(q.id)).toList();
+    // אם כל 8 שאלות שולטו → החזר רשימה ריקה (GameState יסמן Complete מיידית)
+    if (unseen.isEmpty) return [];
 
     final interests = InterestsService.instance;
     final rng = Random();
@@ -110,17 +109,12 @@ class QRepo {
 
     final result = <Question>[];
     final used   = <String>{};
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n && result.length < unseen.length; i++) {
       final fromLiked = rng.nextDouble() < 0.7 && liked.isNotEmpty;
       final q = fromLiked
           ? (_pick(liked, used) ?? _pick(other, used))
           : (_pick(other, used) ?? _pick(liked, used));
       if (q != null) { result.add(q); used.add(q.id); }
-    }
-    // השלם מ-recycled אם נדרש (מצב שכל 8 שאלות כבר נענו נכון)
-    if (result.length < n) {
-      final rem = recycled.where((q) => !used.contains(q.id)).toList()..shuffle(rng);
-      result.addAll(rem.take(n - result.length));
     }
     return result;
   }
