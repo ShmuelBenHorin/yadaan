@@ -1518,14 +1518,40 @@ class _SeasonalBanner extends StatelessWidget {
 // ═══════════════════════════════════════════════
 //  מסך שלבים סיזונאלי
 // ═══════════════════════════════════════════════
-class _SeasonalLevelsScreen extends StatelessWidget {
+class _SeasonalLevelsScreen extends StatefulWidget {
   final SeasonalEvent event;
   const _SeasonalLevelsScreen({required this.event});
+  @override State<_SeasonalLevelsScreen> createState() => _SeasonalLevelsScreenState();
+}
+class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen> with RouteAware {
+  // stars[i] = כוכבים שהושגו בשלב i (0 = לא שוחק)
+  List<int> _stars = [];
+
+  @override void initState() {
+    super.initState();
+    _stars = List.filled(widget.event.levelCount, 0);
+    _loadProgress();
+  }
+
+  Future<void> _loadProgress() async {
+    final p = await SharedPreferences.getInstance();
+    final id = widget.event.id;
+    final updated = List.generate(widget.event.levelCount,
+      (i) => p.getInt('seasonal_${id}_$i') ?? 0);
+    if (mounted) setState(() => _stars = updated);
+  }
+
+  bool _isUnlocked(int i) => i == 0 || (_stars[i - 1] > 0);
+
+  int get _completedCount => _stars.where((s) => s > 0).length;
 
   @override
   Widget build(BuildContext context) {
+    final event = widget.event;
     final color = event.color;
     final count = event.levelCount;
+    final progress = count > 0 ? _completedCount / count : 0.0;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -1542,7 +1568,7 @@ class _SeasonalLevelsScreen extends StatelessWidget {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(event.title,
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
-                  Text('$count שלבים · ${event.questions.length} שאלות',
+                  Text('$_completedCount / $count שלבים',
                     style: const TextStyle(color: Pal.ts, fontSize: 11)),
                 ]),
               ])),
@@ -1551,7 +1577,7 @@ class _SeasonalLevelsScreen extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: LinearProgressIndicator(
-                  value: 0,
+                  value: progress,
                   backgroundColor: Pal.card,
                   valueColor: AlwaysStoppedAnimation(color),
                   minHeight: 6))),
@@ -1567,24 +1593,34 @@ class _SeasonalLevelsScreen extends StatelessWidget {
                       painter: _SeasonalTrailPainter(positions: positions, count: count, color: color))),
                     ...List.generate(count, (i) {
                       final p = positions[i];
+                      final unlocked = _isUnlocked(i);
+                      // השלב הבא לשחק = השלב הראשון שלא הושלם
+                      final isNext = unlocked && (i == 0 || _stars[i] == 0) &&
+                          (i == 0 || _stars[i - 1] > 0);
                       return Positioned(
                         left: p.dx - 40, top: p.dy - 55,
                         child: _SeasonalTrailNode(
                           index: i,
                           total: count,
                           color: color,
-                          onTap: () {
+                          stars: _stars[i],
+                          unlocked: unlocked,
+                          isNext: isNext,
+                          onTap: !unlocked ? null : () async {
                             if (!EnergyService.instance.has) {
                               Navigator.push(ctx, _slide(const NoEnergyScreen()));
                               return;
                             }
                             EnergyService.instance.spend(Cfg.energyCostWrong);
-                            Navigator.push(ctx, _slide(GameScreen(
+                            await Navigator.push(ctx, _slide(GameScreen(
                               diff: Diff.easy,
                               levelIndex: i,
                               retryWith: event.levelQuestions(i),
                               isSeasonal: true,
+                              seasonalEventId: event.id,
                             )));
+                            // רענן התקדמות בחזרה מהמשחק
+                            _loadProgress();
                           },
                         ));
                     }),
@@ -1622,10 +1658,12 @@ class _SeasonalTrailPainter extends CustomPainter {
 
 // ── Seasonal trail node ──────────────────────────────────────
 class _SeasonalTrailNode extends StatefulWidget {
-  final int index, total;
+  final int index, total, stars;
   final Color color;
-  final VoidCallback onTap;
-  const _SeasonalTrailNode({required this.index, required this.total, required this.color, required this.onTap});
+  final bool unlocked, isNext;
+  final VoidCallback? onTap;
+  const _SeasonalTrailNode({required this.index, required this.total, required this.color,
+    required this.stars, required this.unlocked, required this.isNext, required this.onTap});
   @override State<_SeasonalTrailNode> createState() => _SeasonalTrailNodeState();
 }
 class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTickerProviderStateMixin {
@@ -1633,7 +1671,12 @@ class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTicke
   @override void initState() {
     super.initState();
     _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
-    if (widget.index == 0) _pulse.repeat(reverse: true);
+    if (widget.isNext) _pulse.repeat(reverse: true);
+  }
+  @override void didUpdateWidget(_SeasonalTrailNode old) {
+    super.didUpdateWidget(old);
+    if (widget.isNext && !old.isNext) _pulse.repeat(reverse: true);
+    if (!widget.isNext && old.isNext) _pulse.stop();
   }
   @override void dispose() { _pulse.dispose(); super.dispose(); }
   @override Widget build(BuildContext context) {
@@ -1644,29 +1687,42 @@ class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTicke
     else if (pct < 0.70) nodeEmoji = '🌟';
     else nodeEmoji = '🏆';
     const r = _kNodeR, d = r * 2;
-    final isFirst = widget.index == 0;
+
+    // ── תווית עליונה ─────────────────────────────
+    Widget topLabel;
+    if (!widget.unlocked) {
+      topLabel = const Icon(Icons.lock_rounded, color: Colors.white38, size: 14);
+    } else if (widget.isNext) {
+      topLabel = AnimatedBuilder(animation: _pulse, builder: (_, __) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: [c, Color.lerp(c, Colors.white, 0.25)!]),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: c.withOpacity(0.35 + _pulse.value * 0.45),
+            blurRadius: 10 + _pulse.value * 10, spreadRadius: 1)]),
+        child: const Text('▶  שחק', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5))));
+    } else if (widget.stars > 0) {
+      topLabel = Row(mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) => Icon(
+          i < widget.stars ? Icons.star_rounded : Icons.star_border_rounded,
+          size: 13, color: i < widget.stars ? Pal.starOn : Pal.starOff.withOpacity(0.2))));
+    } else {
+      topLabel = const SizedBox.shrink();
+    }
+
     return GestureDetector(
       onTap: widget.onTap,
       child: SizedBox(width: d + 30,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(height: 26, child: Center(child:
-            isFirst
-              ? AnimatedBuilder(animation: _pulse, builder: (_, __) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [c, Color.lerp(c, Colors.white, 0.25)!]),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: c.withOpacity(0.35 + _pulse.value * 0.45),
-                      blurRadius: 10 + _pulse.value * 10, spreadRadius: 1)]),
-                  child: const Text('▶  שחק', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5))))
-              : const SizedBox.shrink())),
+          SizedBox(height: 26, child: Center(child: topLabel)),
           const SizedBox(height: 4),
           AnimatedBuilder(
             animation: _pulse,
             builder: (_, __) {
-              final pv = isFirst ? _pulse.value : 0.0;
+              final pv = widget.isNext ? _pulse.value : 0.0;
+              final locked = !widget.unlocked;
               return Stack(alignment: Alignment.center, children: [
-                if (isFirst) ...[
+                if (widget.isNext) ...[
                   Container(width: d + 30 + pv * 22, height: d + 30 + pv * 22,
                     decoration: BoxDecoration(shape: BoxShape.circle, color: c.withOpacity(0.07 * (1 - pv)))),
                   Container(width: d + 16 + pv * 12, height: d + 16 + pv * 12,
@@ -1675,15 +1731,21 @@ class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTicke
                 Container(width: d, height: d,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: c.withOpacity(0.18),
-                    border: Border.all(color: c, width: 2.5),
-                    boxShadow: [BoxShadow(color: c.withOpacity(0.35 + pv * 0.3), blurRadius: 12 + pv * 8)]),
-                  child: Center(child: Text(nodeEmoji, style: const TextStyle(fontSize: 20)))),
+                    color: locked ? Colors.white.withOpacity(0.05) : c.withOpacity(0.18),
+                    border: Border.all(
+                      color: locked ? Colors.white24 : c,
+                      width: 2.5),
+                    boxShadow: locked ? [] : [BoxShadow(color: c.withOpacity(0.35 + pv * 0.3), blurRadius: 12 + pv * 8)]),
+                  child: Center(child: locked
+                    ? const Icon(Icons.lock_rounded, color: Colors.white30, size: 22)
+                    : Text(nodeEmoji, style: const TextStyle(fontSize: 20)))),
               ]);
             }),
           const SizedBox(height: 4),
           Text('שלב ${widget.index + 1}',
-            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+            style: TextStyle(
+              color: widget.unlocked ? Colors.white : Colors.white38,
+              fontSize: 11, fontWeight: FontWeight.w700)),
         ])));
   }
 }
@@ -2118,7 +2180,8 @@ class GameScreen extends StatefulWidget {
   final Diff diff; final int levelIndex;
   final List<Question>? retryWith;
   final bool isSeasonal;
-  const GameScreen({super.key,required this.diff,required this.levelIndex,this.retryWith,this.isSeasonal=false});
+  final String? seasonalEventId; // אם לא null — שלב עונתי עם מזהה לשמירת התקדמות
+  const GameScreen({super.key,required this.diff,required this.levelIndex,this.retryWith,this.isSeasonal=false,this.seasonalEventId});
   @override State<GameScreen> createState()=>_GS();
 }
 class _GS extends State<GameScreen> with TickerProviderStateMixin {
@@ -2164,7 +2227,15 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
       _energyLossCtrl.forward(from:0);
     }
     setState((){});
-    if(_gs.phase==Phase.complete&&!_exiting){_exiting=true;Analytics.levelCompleted(diff:widget.diff.name,levelIndex:widget.levelIndex,stars:_gs.stars);Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});}
+    if(_gs.phase==Phase.complete&&!_exiting){
+      _exiting=true;
+      Analytics.levelCompleted(diff:widget.diff.name,levelIndex:widget.levelIndex,stars:_gs.stars);
+      // שמור התקדמות שלב עונתי
+      if(widget.seasonalEventId!=null){
+        SharedPreferences.getInstance().then((p)=>p.setInt('seasonal_${widget.seasonalEventId}_${widget.levelIndex}',_gs.stars));
+      }
+      Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(CompleteScreen(diff:widget.diff,levelIndex:widget.levelIndex,stars:_gs.stars)));});
+    }
     if(_gs.phase==Phase.failed&&!_exiting){final fq=_gs.failedQuestions;_exiting=true;Analytics.levelFailed(diff:widget.diff.name,levelIndex:widget.levelIndex);Future.delayed(const Duration(milliseconds:400),(){if(mounted)Navigator.pushReplacement(context,_slide(FailedScreen(diff:widget.diff,levelIndex:widget.levelIndex,failedQuestions:fq)));});}
   }
   @override void dispose(){_gs.removeListener(_onChange);EnergyService.instance.removeListener(_onEnergyChange);_gs.dispose();_shakeCtrl.dispose();_cardCtrl.dispose();_energyLossCtrl.dispose();super.dispose();}
