@@ -1517,13 +1517,6 @@ class _SeasonalLevelsScreen extends StatelessWidget {
   final SeasonalEvent event;
   const _SeasonalLevelsScreen({required this.event});
 
-  String _levelEmoji(int level, int total) {
-    final pct = level / total;
-    if (pct < 0.35) return '🟢';
-    if (pct < 0.70) return '🟡';
-    return '🔴';
-  }
-
   @override
   Widget build(BuildContext context) {
     final color = event.color;
@@ -1532,82 +1525,161 @@ class _SeasonalLevelsScreen extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFF060A1A),
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.pop(context)),
-          title: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(event.emoji, style: const TextStyle(fontSize: 20)),
-            const SizedBox(width: 8),
-            Text(event.title,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
-          ]),
-          centerTitle: true,
-        ),
-        body: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Column(children: [
-            // כותרת משנה
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withOpacity(0.3))),
-              child: Text('$count שלבים · ${event.questions.length} שאלות · מהקל לקשה',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700))),
-            const SizedBox(height: 16),
-            // גריד שלבים
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.4,
-                ),
-                itemCount: count,
-                itemBuilder: (ctx, i) {
-                  final qs = event.levelQuestions(i);
-                  final emoji = _levelEmoji(i, count);
-                  return GestureDetector(
-                    onTap: () => Navigator.push(ctx, _slide(GameScreen(
-                      diff: Diff.easy,
-                      levelIndex: i,
-                      retryWith: qs,
-                      isSeasonal: true,
-                    ))),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topRight, end: Alignment.bottomLeft,
-                          colors: [color.withOpacity(0.20), color.withOpacity(0.06)]),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: color.withOpacity(0.45), width: 1.4),
-                        boxShadow: [BoxShadow(color: color.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))]),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(emoji, style: const TextStyle(fontSize: 24)),
-                          const SizedBox(height: 6),
-                          Text('שלב ${i + 1}',
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
-                          const SizedBox(height: 2),
-                          Text('${qs.length} שאלות',
-                            style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12)),
-                        ])));
-                },
-              ),
-            ),
-          ]),
-        ),
-      ),
-    );
+        body: Stack(children: [
+          const _MountainBg(),
+          SafeArea(child: Column(children: [
+            Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(children: [
+                _iconBtn(Icons.arrow_back, () => Navigator.pop(context)),
+                const SizedBox(width: 12),
+                Text(event.emoji, style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 8),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(event.title,
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+                  Text('$count שלבים · ${event.questions.length} שאלות',
+                    style: const TextStyle(color: Pal.ts, fontSize: 11)),
+                ]),
+              ])),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  value: 0,
+                  backgroundColor: Pal.card,
+                  valueColor: AlwaysStoppedAnimation(color),
+                  minHeight: 6))),
+            Expanded(child: LayoutBuilder(builder: (ctx, cstr) {
+              final w = cstr.maxWidth;
+              final mapH = count * _kRowH + _kPadV * 2;
+              final positions = List.generate(count, (i) => Offset(_lvlX(i, w), mapH - _kPadV - i * _kRowH));
+              return SingleChildScrollView(
+                reverse: true,
+                child: SizedBox(width: w, height: mapH,
+                  child: Stack(clipBehavior: Clip.none, children: [
+                    Positioned.fill(child: CustomPaint(
+                      painter: _SeasonalTrailPainter(positions: positions, count: count, color: color))),
+                    ...List.generate(count, (i) {
+                      final p = positions[i];
+                      return Positioned(
+                        left: p.dx - 40, top: p.dy - 55,
+                        child: _SeasonalTrailNode(
+                          index: i,
+                          total: count,
+                          color: color,
+                          onTap: () {
+                            if (!EnergyService.instance.has) {
+                              Navigator.push(ctx, _slide(const NoEnergyScreen()));
+                              return;
+                            }
+                            EnergyService.instance.spend(Cfg.energyCostWrong);
+                            Navigator.push(ctx, _slide(GameScreen(
+                              diff: Diff.easy,
+                              levelIndex: i,
+                              retryWith: event.levelQuestions(i),
+                              isSeasonal: true,
+                            )));
+                          },
+                        ));
+                    }),
+                  ])));
+            })),
+          ])),
+        ])));
+  }
+}
+
+// ── Seasonal trail painter — always unlocked (event color) ──
+class _SeasonalTrailPainter extends CustomPainter {
+  final List<Offset> positions;
+  final int count;
+  final Color color;
+  const _SeasonalTrailPainter({required this.positions, required this.count, required this.color});
+  @override void paint(Canvas canvas, Size size) {
+    for (int i = 0; i < count - 1; i++) {
+      final a = positions[i], b = positions[i + 1];
+      final dy = a.dy - b.dy;
+      final path = Path()..moveTo(a.dx, a.dy)
+        ..cubicTo(a.dx, a.dy - dy * 0.45, b.dx, b.dy + dy * 0.45, b.dx, b.dy);
+      canvas.drawPath(path, Paint()..color = color.withOpacity(0.12)..strokeWidth = 22
+        ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+      canvas.drawPath(path, Paint()..color = color.withOpacity(0.28)..strokeWidth = 9
+        ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+      canvas.drawPath(path, Paint()..color = color.withOpacity(0.90)..strokeWidth = 3.5
+        ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+    }
+  }
+  @override bool shouldRepaint(_SeasonalTrailPainter old) => old.color != color || old.count != count;
+}
+
+// ── Seasonal trail node ──────────────────────────────────────
+class _SeasonalTrailNode extends StatefulWidget {
+  final int index, total;
+  final Color color;
+  final VoidCallback onTap;
+  const _SeasonalTrailNode({required this.index, required this.total, required this.color, required this.onTap});
+  @override State<_SeasonalTrailNode> createState() => _SeasonalTrailNodeState();
+}
+class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+  @override void initState() {
+    super.initState();
+    _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600));
+    if (widget.index == 0) _pulse.repeat(reverse: true);
+  }
+  @override void dispose() { _pulse.dispose(); super.dispose(); }
+  @override Widget build(BuildContext context) {
+    final c = widget.color;
+    final String nodeEmoji;
+    final pct = widget.index / widget.total;
+    if (pct < 0.35) nodeEmoji = '⚽';
+    else if (pct < 0.70) nodeEmoji = '🌟';
+    else nodeEmoji = '🏆';
+    const r = _kNodeR, d = r * 2;
+    final isFirst = widget.index == 0;
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: SizedBox(width: d + 30,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SizedBox(height: 26, child: Center(child:
+            isFirst
+              ? AnimatedBuilder(animation: _pulse, builder: (_, __) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [c, Color.lerp(c, Colors.white, 0.25)!]),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: c.withOpacity(0.35 + _pulse.value * 0.45),
+                      blurRadius: 10 + _pulse.value * 10, spreadRadius: 1)]),
+                  child: const Text('▶  שחק', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.5))))
+              : const SizedBox.shrink())),
+          const SizedBox(height: 4),
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (_, __) {
+              final pv = isFirst ? _pulse.value : 0.0;
+              return Stack(alignment: Alignment.center, children: [
+                if (isFirst) ...[
+                  Container(width: d + 30 + pv * 22, height: d + 30 + pv * 22,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: c.withOpacity(0.07 * (1 - pv)))),
+                  Container(width: d + 16 + pv * 12, height: d + 16 + pv * 12,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: c.withOpacity(0.13 * (1 - pv * 0.5)))),
+                ],
+                Container(width: d, height: d,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: c.withOpacity(0.18),
+                    border: Border.all(color: c, width: 2.5),
+                    boxShadow: [BoxShadow(color: c.withOpacity(0.35 + pv * 0.3), blurRadius: 12 + pv * 8)]),
+                  child: Center(child: Text(nodeEmoji, style: const TextStyle(fontSize: 20)))),
+              ]);
+            }),
+          const SizedBox(height: 4),
+          Text('שלב ${widget.index + 1}',
+            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+        ])));
   }
 }
 
@@ -2457,7 +2529,7 @@ class CompleteScreen extends StatefulWidget {
 }
 class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
   late final List<AnimationController> _sc;
-  late final AnimationController _enter, _confettiCtrl;
+  late final AnimationController _enter, _confettiCtrl, _burstCtrl;
   final List<_Confetti> _confettiPieces = [];
   bool _showButtons = false;
   bool _showLevelUp = false;
@@ -2467,6 +2539,7 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
     super.initState();
     _enter = AnimationController(vsync:this, duration:const Duration(milliseconds:700))..forward();
     _confettiCtrl = AnimationController(vsync:this, duration:const Duration(seconds:3))..forward();
+    _burstCtrl = AnimationController(vsync:this, duration:const Duration(milliseconds:900))..forward();
     _levelUpCtrl = AnimationController(vsync:this, duration:const Duration(milliseconds:800));
     _sc = List.generate(3,(i) => AnimationController(vsync:this, duration:const Duration(milliseconds:600)));
     // Generate confetti
@@ -2553,7 +2626,7 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
   }
 
   @override void dispose() {
-    _enter.dispose(); _confettiCtrl.dispose(); _levelUpCtrl.dispose();
+    _enter.dispose(); _confettiCtrl.dispose(); _levelUpCtrl.dispose(); _burstCtrl.dispose();
     for (final c in _sc) c.dispose();
     super.dispose();
   }
@@ -2567,6 +2640,12 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
     final perfect = widget.stars == Cfg.starsPerLevel;
     return Scaffold(backgroundColor: Pal.bg, body: Stack(children: [
       const StarField(),
+      // Burst shockwave
+      AnimatedBuilder(
+        animation: _burstCtrl,
+        builder: (_, __) => CustomPaint(
+          size: Size.infinite,
+          painter: _BurstPainter(_burstCtrl.value, perfect ? Pal.gold : widget.diff.color))),
       // Confetti layer
       AnimatedBuilder(
         animation: _confettiCtrl,
@@ -2652,6 +2731,33 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
         ])))),
     ]));
   }
+}
+
+// ─── Burst / shockwave painter ───────────────────
+class _BurstPainter extends CustomPainter {
+  final double t; // 0..1
+  final Color color;
+  _BurstPainter(this.t, this.color);
+  @override void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2, cy = size.height * 0.38;
+    // 3 expanding rings, staggered
+    for (int i = 0; i < 3; i++) {
+      final delay = i * 0.15;
+      final progress = ((t - delay) / (1 - delay)).clamp(0.0, 1.0);
+      if (progress <= 0) continue;
+      final r = progress * size.width * 0.85;
+      final opacity = (1.0 - progress) * (i == 0 ? 0.55 : i == 1 ? 0.35 : 0.20);
+      if (opacity <= 0) continue;
+      canvas.drawCircle(
+        Offset(cx, cy), r,
+        Paint()
+          ..color = color.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = (1 - progress) * (i == 0 ? 8 : i == 1 ? 5 : 3)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, (1 - progress) * 12));
+    }
+  }
+  @override bool shouldRepaint(_BurstPainter old) => old.t != t;
 }
 
 // ─── Confetti data ───

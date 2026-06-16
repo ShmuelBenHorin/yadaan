@@ -758,17 +758,45 @@ class _BQTile extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 //  RESULT SCREEN
 // ════════════════════════════════════════════════════════════════════════════
-class BagrutResultScreen extends StatelessWidget {
+class BagrutResultScreen extends StatefulWidget {
   final List<BagrutQuestion> questions;
   final Map<String,int> catCorrect,catTotal;
   final int totalCorrect;
   final List<String> weaknessDetected;
   const BagrutResultScreen({super.key,required this.questions,required this.catCorrect,required this.catTotal,required this.totalCorrect,required this.weaknessDetected});
+  @override State<BagrutResultScreen> createState()=>_BagrutResultScreenState();
+}
+class _BagrutResultScreenState extends State<BagrutResultScreen> with TickerProviderStateMixin {
+  late final AnimationController _enter, _confettiCtrl;
+  final List<_Confetti> _pieces=[];
+  bool _showContent=false;
+
+  @override void initState(){
+    super.initState();
+    _enter=AnimationController(vsync:this,duration:const Duration(milliseconds:750))..forward();
+    _confettiCtrl=AnimationController(vsync:this,duration:const Duration(seconds:3));
+    final total=widget.questions.length;
+    final pct=total==0?0.0:widget.totalCorrect/total;
+    if(pct>=0.7){
+      final rnd=Random();
+      for(int i=0;i<55;i++){
+        _pieces.add(_Confetti(
+          x:rnd.nextDouble(),delay:rnd.nextDouble()*0.5,
+          color:[_gold,_green,_blue,const Color(0xFFFF6B9D),const Color(0xFF4D96FF),Colors.white][rnd.nextInt(6)],
+          size:rnd.nextDouble()*9+4,
+          rotSpeed:(rnd.nextDouble()-0.5)*3,
+          swayAmp:rnd.nextDouble()*0.05+0.01));
+      }
+      _confettiCtrl.forward();
+    }
+    Future.delayed(const Duration(milliseconds:200),(){if(mounted)setState(()=>_showContent=true);});
+  }
+  @override void dispose(){_enter.dispose();_confettiCtrl.dispose();super.dispose();}
 
   @override
   Widget build(BuildContext ctx){
-    final total=questions.length;
-    final pct=total==0?0.0:totalCorrect/total;
+    final total=widget.questions.length;
+    final pct=total==0?0.0:widget.totalCorrect/total;
     final emoji=pct>=0.9?'🏆':pct>=0.7?'⭐':pct>=0.5?'📘':'💪';
     final msg=pct>=0.9?'מצוין! שליטה מלאה!':pct>=0.7?'כל הכבוד, עבודה טובה':pct>=0.5?'טוב — יש עוד מה לשפר':'יש עבודה — המשך לתרגל!';
     final pctColor=pct>=0.7?_green:pct>=0.5?_blue:_red;
@@ -777,12 +805,20 @@ class BagrutResultScreen extends StatelessWidget {
       textDirection:TextDirection.rtl,
       child:Scaffold(
         backgroundColor:_bg,
-        body:SafeArea(child:SingleChildScrollView(
+        body:Stack(children:[
+          if(_pieces.isNotEmpty)AnimatedBuilder(animation:_confettiCtrl,
+            builder:(_,__)=>CustomPaint(size:Size.infinite,
+              painter:_ConfettiPainter(_pieces,_confettiCtrl.value))),
+          SafeArea(child:SingleChildScrollView(
           padding:const EdgeInsets.fromLTRB(20,20,20,32),
           child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             const SizedBox(height:12),
             // ── score ──────────────────────────────────────────────────────
-            Container(
+            ScaleTransition(
+              scale:CurvedAnimation(parent:_enter,curve:Curves.easeOutBack),
+              child:FadeTransition(
+              opacity:_enter,
+              child:Container(
               padding:const EdgeInsets.all(24),
               decoration:BoxDecoration(
                 gradient:LinearGradient(colors:[pctColor.withAlpha(40),_card],begin:Alignment.topCenter,end:Alignment.bottomCenter),
@@ -791,21 +827,21 @@ class BagrutResultScreen extends StatelessWidget {
               child:Column(children:[
                 Text(emoji,style:const TextStyle(fontSize:56)),
                 const SizedBox(height:10),
-                Text('$totalCorrect מתוך $total',style:const TextStyle(color:_textP,fontSize:36,fontWeight:FontWeight.w900)),
+                Text('${widget.totalCorrect} מתוך $total',style:const TextStyle(color:_textP,fontSize:36,fontWeight:FontWeight.w900)),
                 const SizedBox(height:4),
                 Text('${(pct*100).round()}%',style:TextStyle(color:pctColor,fontSize:22,fontWeight:FontWeight.w900)),
                 const SizedBox(height:8),
                 Text(msg,style:const TextStyle(color:_textP,fontSize:16),textAlign:TextAlign.center),
-              ])),
+              ])))),
 
             const SizedBox(height:20),
 
             // ── per topic ──────────────────────────────────────────────────
-            if(catTotal.isNotEmpty)...[
+            if(widget.catTotal.isNotEmpty)...[
               const Text('ביצועים לפי נושא',style:TextStyle(color:_textP,fontSize:16,fontWeight:FontWeight.w800)),
               const SizedBox(height:10),
-              ...catTotal.entries.map((e){
-                final cat=e.key;final tot=e.value;final cor=catCorrect[cat]??0;
+              ...widget.catTotal.entries.map((e){
+                final cat=e.key;final tot=e.value;final cor=widget.catCorrect[cat]??0;
                 final acc=tot==0?0.0:cor/tot;
                 final col=acc>=0.7?_green:acc>=0.5?_blue:_red;
                 return Container(
@@ -825,9 +861,9 @@ class BagrutResultScreen extends StatelessWidget {
             ],
 
             // ── weakness detected ──────────────────────────────────────────
-            if(weaknessDetected.isNotEmpty)...[
+            if(widget.weaknessDetected.isNotEmpty)...[
               const SizedBox(height:12),
-              _WeaknessCard(cats:weaknessDetected),
+              _WeaknessCard(cats:widget.weaknessDetected),
             ],
 
             const SizedBox(height:20),
@@ -849,8 +885,7 @@ class BagrutResultScreen extends StatelessWidget {
               )),
           ]),
         )),
-      ),
-    );
+        ])));
   }
 }
 
