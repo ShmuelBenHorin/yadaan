@@ -8,26 +8,57 @@ Flutter trivia app (Hebrew, RTL). iOS + Android. Monetized via RevenueCat IAP (P
 Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.17+62`
 
 ## Key Files
+
+### Core
 | File | Purpose |
 |------|---------|
-| `lib/main.dart` | Everything — all screens, services, logic. Pulls in `bagrut_screen.dart` and `seasonal_service.dart` via `part` |
-| `lib/bagrut_screen.dart` | `part of 'main.dart'` — full Bagrut history quiz feature |
-| `lib/seasonal_service.dart` | `part of 'main.dart'` — seasonal/event questions from Firestore |
-| `lib/questions_easy/medium/hard.dart` | JSON strings (`kEasy`, `kMedium`, `kHard`) — trivia questions |
-| `lib/questions_bagrut.dart` | JSON string (`kBagrut`) — history exam questions |
-| `lib/user_stats.dart` | XP, streaks, levels. Has `playedToday` getter |
-| `lib/interests_service.dart` | Category interest filtering |
-| `ios/Runner/AppDelegate.swift` | iCloud KV Store MethodChannel (`icloud_kv`) |
-| `ios/Runner/Runner.entitlements` | iCloud KV entitlement |
-| `android/app/src/main/AndroidManifest.xml` | Auto Backup config |
-| `codemagic.yaml` | CI/CD — iOS + Android workflows, `xcode: latest`, disables SPM before pub get |
+| `lib/main.dart` | כל המסכים והווידג'טים (~3,823 שורות). מייבא את כל הקבצים למטה |
+| `lib/config.dart` | `Cfg` (קבועי משחק, AdMob IDs) + `Pal` (פלטת צבעים) |
+| `lib/models/question.dart` | `Diff` enum, `Question` model, `QRepo`, `MistakesService` |
+
+### Services (`lib/services/`)
+| File | Class | Purpose |
+|------|-------|---------|
+| `analytics.dart` | `Analytics` | Firebase Analytics |
+| `notification_service.dart` | `NotificationService` | Push notifications (energy + streak) |
+| `sfx.dart` | `Sfx` | צלילי משחק + `mutedNotifier` (ValueNotifier) |
+| `purchase_service.dart` | `PurchaseService` | RevenueCat IAP |
+| `energy_service.dart` | `EnergyService` | מערכת אנרגיה + `checkRecharge()` |
+| `level_service.dart` | `LevelService` | כוכבים ושלבים |
+| `mistakes_service.dart` | `MistakesService` | שגיאות אחרונות |
+| `icloud_kv.dart` | `ICloudKV` | סנכרון iCloud (iOS) |
+
+### Part files (גישה לפרטיים של main.dart)
+| File | Purpose |
+|------|---------|
+| `lib/bagrut_screen.dart` | `part of 'main.dart'` — מסכי בגרות היסטוריה |
+| `lib/seasonal_service.dart` | `part of 'main.dart'` — שאלות עונתיות מ-Firestore |
+
+### Other
+| File | Purpose |
+|------|---------|
+| `lib/user_stats.dart` | `UserStatsService` — XP, streak, רמות. `playedToday` getter |
+| `lib/interests_service.dart` | `InterestsService` — פילטור קטגוריות |
+| `lib/cloud_sync_service.dart` | `CloudSyncService` — Google Drive backup (Android) |
+| `lib/questions_easy/medium/hard.dart` | JSON strings (`kEasy`, `kMedium`, `kHard`) |
+| `lib/questions_bagrut.dart` | JSON string (`kBagrut`) |
+| `ios/Runner/AppDelegate.swift` | iCloud KV MethodChannel (`icloud_kv`) |
+| `codemagic.yaml` | CI/CD — iOS + Android workflows, `xcode: latest` |
 
 ## Architecture
-- **No separate files per screen** — everything in `main.dart` (+ `bagrut_screen.dart` + `seasonal_service.dart` as `part`s)
+- **מסכים וווידג'טים**: ב-`main.dart` (עתידי: להוציא ל-`lib/screens/`)
+- **`part of` files**: `bagrut_screen.dart` + `seasonal_service.dart` — גישה למשתנים פרטיים של main.dart
 - **State management**: `ChangeNotifier` singletons — `PurchaseService`, `LevelService`, `EnergyService`, `BagrutService`, `UserStatsService`, `SeasonalService`
-- **Questions**: Dart `const String` with embedded JSON (static) + Firestore (seasonal, remote)
-- **Persistence**: `SharedPreferences` only (no database, no server) — except seasonal cache
+- **Questions**: Dart `const String` עם JSON משובץ + Firestore (עונתי)
+- **Persistence**: `SharedPreferences` בלבד — חוץ מ-seasonal cache
 - **IAP**: RevenueCat (`purchases_flutter`) — entitlement: `'premium'`
+
+## Sound Mute
+`Sfx.mutedNotifier` — `ValueNotifier<bool>` נשמר ב-SharedPreferences (`sfx_muted`).
+- `Sfx.setMuted(true/false)` — שינוי + שמירה
+- `Sfx.muted` — getter נוכחי
+- כל correct/wrong/perfect/fail בודקים `if (muted) return;` בתחילה
+- הרטט (haptic) **לא** מושתק
 
 ## Key Services (all singletons, call `.instance`)
 ```dart
@@ -39,7 +70,7 @@ SeasonalService.instance.activeEvents    // List<SeasonalEvent> — filtered by 
 UserStatsService.instance.playedToday    // bool — whether user already played today
 ```
 
-## Color Palette (`Pal` class in main.dart)
+## Color Palette (`Pal` class in `lib/config.dart`)
 ```dart
 Pal.bg, Pal.bgD, Pal.card, Pal.cardL
 Pal.gold, Pal.accent, Pal.green, Pal.red, Pal.premium
