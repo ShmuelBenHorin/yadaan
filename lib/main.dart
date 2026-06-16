@@ -49,11 +49,16 @@ class GameState extends ChangeNotifier {
   GameState({required this.levelIdx,required this.diff,List<Question>? retryWith,this.isSeasonal=false}){
     if(retryWith==null) Analytics.levelStarted();
     if(retryWith!=null){
-      // שאלות שנכשלו קודם + שאלות חדשות להשלמה לTotal
-      final failedIds=retryWith.map((q)=>q.id).toSet();
-      final fresh=QRepo.forLevel(levelIdx,diff).where((q)=>!failedIds.contains(q.id)).toList();
-      final needed=(Cfg.questionsPerLevel-retryWith.length).clamp(0,Cfg.questionsPerLevel);
-      _queue=[...retryWith,...fresh.take(needed)];
+      if(isSeasonal){
+        // שלב עונתי — רק השאלות שנשלחו, ללא השלמה מ-QRepo
+        _queue=List<Question>.from(retryWith);
+      } else {
+        // חזרה אחרי כישלון — שאלות שנכשלו + השלמה עד questionsPerLevel
+        final failedIds=retryWith.map((q)=>q.id).toSet();
+        final fresh=QRepo.forLevel(levelIdx,diff).where((q)=>!failedIds.contains(q.id)).toList();
+        final needed=(Cfg.questionsPerLevel-retryWith.length).clamp(0,Cfg.questionsPerLevel);
+        _queue=[...retryWith,...fresh.take(needed)];
+      }
     } else {
       _queue=List<Question>.from(QRepo.forLevel(levelIdx,diff));
     }
