@@ -56,19 +56,11 @@ class GameState extends ChangeNotifier {
       _queue=List<Question>.from(QRepo.forLevel(levelIdx,diff));
     }
     _originalTotal=_queue.length;
-    // שלב שלוט לגמרי (כל 8 שאלות נענו נכון) — סיים מיידית עם 3 כוכבים
-    if(_queue.isEmpty){
-      _phase=Phase.complete;
-      _stars=Cfg.starsPerLevel;
-      LevelService.instance.save(diff,levelIdx,Cfg.starsPerLevel);
-      return;
-    }
     _startTimer();
   }
   int get stars=>_stars; int? get sel=>_sel; bool get fb=>_fb;
   bool get waitingContinue=>_waitingContinue;
-  Phase get phase=>_phase; int get timer=>_timer;
-  Question get cur=>_queue.isNotEmpty?_queue[0]:const Question(id:'',category:'',diff:Diff.easy,q:'',a:[],c:0);
+  Phase get phase=>_phase; int get timer=>_timer; Question get cur=>_queue[0];
   int get total=>_originalTotal;
   int get qi=>_answeredCorrect;
   double get prog=>_originalTotal==0?1.0:_answeredCorrect/_originalTotal;

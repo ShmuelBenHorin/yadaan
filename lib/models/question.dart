@@ -78,11 +78,10 @@ class QRepo {
     final end     = (start + n).clamp(0, all.length);
     final partition = List<Question>.from(all.sublist(start, end));
 
-    // ── רק unseen — שאלות שנענו נכון לא מוצגות שוב ────────────────
-    final seen   = _seen[d] ?? {};
-    final unseen = partition.where((q) => !seen.contains(q.id)).toList();
-    // אם כל 8 שאלות שולטו → החזר רשימה ריקה (GameState יסמן Complete מיידית)
-    if (unseen.isEmpty) return [];
+    // ── כל שאלות החלוקה — ללא פילטור seen ───────────────────────
+    // הסיבה: "לא לחזור בתוך סשן" מטופל ע"י GameState (מוחק מה-queue).
+    // seen_easy היה מקטין את השלב לביקור הבא — עכשיו לא רצוי.
+    // עם חלוקות קבועות, cross-level contamination בלתי אפשרי ממילא.
 
     final interests = InterestsService.instance;
     final rng = Random();
@@ -90,7 +89,7 @@ class QRepo {
     // ── סינון לפי עניין (70% מועדף / 30% אחר) ───────────────────
     final Map<String, List<Question>> liked = {};
     final Map<String, List<Question>> other = {};
-    for (final q in unseen) {
+    for (final q in partition) {
       if (interests.isSelected(q.category)) {
         liked.putIfAbsent(q.category, () => []).add(q);
       } else {
@@ -109,7 +108,7 @@ class QRepo {
 
     final result = <Question>[];
     final used   = <String>{};
-    for (int i = 0; i < n && result.length < unseen.length; i++) {
+    for (int i = 0; i < n; i++) {
       final fromLiked = rng.nextDouble() < 0.7 && liked.isNotEmpty;
       final q = fromLiked
           ? (_pick(liked, used) ?? _pick(other, used))
