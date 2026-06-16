@@ -1638,8 +1638,8 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
                     ...List.generate(count, (i) {
                       final p = positions[i];
                       final unlocked = _isUnlocked(i);
-                      final isNext = (unlocked && (i == 0 || _stars[i] == 0) &&
-                          (i == 0 || _stars[i - 1] > 0)) || widget.highlightLevel == i;
+                      final isNext = unlocked && (i == 0 || _stars[i] == 0) &&
+                          (i == 0 || _stars[i - 1] > 0);
                       return Positioned(
                         left: p.dx - 40, top: p.dy - 55,
                         child: _SeasonalTrailNode(
@@ -1696,30 +1696,52 @@ class _SeasonalTrailPainter extends CustomPainter {
     );
   }
 
+  static Path _partialPath(Path full, double fraction) {
+    if (fraction <= 0) return Path();
+    if (fraction >= 1) return full;
+    final metric = full.computeMetrics().first;
+    return metric.extractPath(0, metric.length * fraction);
+  }
+
+  Path _makePath(Offset a, Offset b) {
+    final dy = a.dy - b.dy;
+    return Path()..moveTo(a.dx, a.dy)
+      ..cubicTo(a.dx, a.dy - dy * 0.45, b.dx, b.dy + dy * 0.45, b.dx, b.dy);
+  }
+
+  void _drawFullPath(Canvas canvas, Path path) {
+    canvas.drawPath(path, Paint()..color = color.withOpacity(0.12)..strokeWidth = 22
+      ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
+    canvas.drawPath(path, Paint()..color = color.withOpacity(0.28)..strokeWidth = 9
+      ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+    canvas.drawPath(path, Paint()..color = color.withOpacity(0.90)..strokeWidth = 3.5
+      ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+  }
+
   @override void paint(Canvas canvas, Size size) {
     for (int i = 0; i < count - 1; i++) {
       final a = positions[i], b = positions[i + 1];
       final completed = stars.length > i && stars[i] > 0;
-      final dy = a.dy - b.dy;
-      final path = Path()..moveTo(a.dx, a.dy)
-        ..cubicTo(a.dx, a.dy - dy * 0.45, b.dx, b.dy + dy * 0.45, b.dx, b.dy);
-      if (completed) {
-        canvas.drawPath(path, Paint()..color = color.withOpacity(0.12)..strokeWidth = 22
-          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
-        canvas.drawPath(path, Paint()..color = color.withOpacity(0.28)..strokeWidth = 9
-          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
-        canvas.drawPath(path, Paint()..color = color.withOpacity(0.90)..strokeWidth = 3.5
-          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
-      } else {
-        // מסלול הבא — קו עדין
-        canvas.drawPath(path, Paint()..color = color.withOpacity(0.08)..strokeWidth = 12
-          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
-        canvas.drawPath(path, Paint()..color = color.withOpacity(0.20)..strokeWidth = 3
-          ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+
+      // גזרת הכדור — מצייר רק עד מיקום הכדור
+      if (ballFromIdx != null && i == ballFromIdx) {
+        if (ballProgress > 0) {
+          _drawFullPath(canvas, _partialPath(_makePath(a, b), ballProgress));
+        }
+        continue;
       }
+
+      // גזרות אחרי הכדור — לא מציג כלום (נעול)
+      if (ballFromIdx != null && i > ballFromIdx!) continue;
+
+      // גזרות שהכדור עבר / רגיל
+      final path = _makePath(a, b);
+      if (completed) {
+        _drawFullPath(canvas, path);
+      }
+      // לא מושלם ולא בהמשך לכדור — לא מציג קו (שלב נעול)
     }
 
     // ── כדור אנימציה ──
@@ -2036,7 +2058,6 @@ class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProvid
                     ))),
                   ...List.generate(count,(i){
                     final p=positions[i];
-                    final isHighlighted = widget.highlightLevel == i;
                     return Positioned(
                       left:p.dx-40,top:p.dy-55,
                       child:_TrailNode(
@@ -2044,7 +2065,7 @@ class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProvid
                         unlocked:ls.isLevelUnlocked(widget.diff,i),
                         stars:ls.starsFor(widget.diff,i),
                         perfect:ls.starsFor(widget.diff,i)==Cfg.starsPerLevel,
-                        isNext:i==nextIdx || isHighlighted,
+                        isNext:i==nextIdx,
                         lockLabel:(!ls.isLevelUnlocked(widget.diff,i)&&i>0&&i%Cfg.segmentSize==0)?ls.segmentProgress(widget.diff,i):"",
                         onTap:(){
                           if(!ls.isLevelUnlocked(widget.diff,i))return;
@@ -2166,8 +2187,45 @@ class _TrailPainter extends CustomPainter {
       ..cubicTo(a.dx, a.dy - dy*0.45, b.dx, b.dy + dy*0.45, b.dx, b.dy);
   }
 
+  // מחזיר חלק מהנתיב (0..fraction מתוך 0..1)
+  static Path _partialPath(Path full, double fraction) {
+    if (fraction <= 0) return Path();
+    if (fraction >= 1) return full;
+    final metric = full.computeMetrics().first;
+    return metric.extractPath(0, metric.length * fraction);
+  }
+
+  void _drawGlowPath(Canvas canvas, Path path) {
+    canvas.drawPath(path, Paint()
+      ..color = diff.color.withOpacity(0.10)..strokeWidth = 28
+      ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14));
+    canvas.drawPath(path, Paint()
+      ..color = diff.color.withOpacity(0.25)..strokeWidth = 10
+      ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
+    canvas.drawPath(path, Paint()
+      ..color = diff.color.withOpacity(0.85)..strokeWidth = 4
+      ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+  }
+
+  void _drawDashed(Canvas canvas, Offset a, Offset b) {
+    final pm = Paint()
+      ..color = Pal.ts.withOpacity(0.18)..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    const steps = 40;
+    bool on = true;
+    Offset? prev;
+    for (int s = 0; s <= steps; s++) {
+      final pt = _bezierPt(a, b, s / steps);
+      if (s % 4 == 0) on = !on;
+      if (on && prev != null) canvas.drawLine(prev, pt, pm);
+      prev = pt;
+    }
+  }
+
   @override void paint(Canvas canvas, Size size) {
-    // מצא את הנעול הראשון — נציג קו מקוקו רק עד השלב הזה
+    // מצא את הנעול הראשון
     int firstLocked = count;
     for (int i = 0; i < count; i++) {
       if (!ls.isLevelUnlocked(diff, i)) { firstLocked = i; break; }
@@ -2175,52 +2233,29 @@ class _TrailPainter extends CustomPainter {
 
     for (int i = 0; i < count - 1; i++) {
       final a = positions[i], b = positions[i + 1];
-      final segUnlocked = ls.isLevelUnlocked(diff, i) && ls.isLevelUnlocked(diff, i + 1);
 
-      if (!segUnlocked) {
-        // קו מקוקו עדין רק לגזרה הנעולה הראשונה
-        if (i != firstLocked - 1) continue;
-        // ציור מקוקו על גבי הבזייר (לא קו ישר)
-        final path = _segmentPath(a, b);
-        final pm = Paint()
-          ..color = Pal.ts.withOpacity(0.18)
-          ..strokeWidth = 2.5
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round;
-        // דמות מקוקו: דגימת נקודות על הבזייר
-        const steps = 40;
-        bool on = true;
-        Offset? prev;
-        for (int s = 0; s <= steps; s++) {
-          final pt = _bezierPt(a, b, s / steps);
-          if (s % 4 == 0) on = !on;
-          if (on && prev != null) canvas.drawLine(prev, pt, pm);
-          prev = pt;
+      // גזרת הכדור — מצייר רק את החלק שהכדור כבר עבר
+      if (ballFromIdx != null && i == ballFromIdx) {
+        if (ballProgress > 0) {
+          final full = _segmentPath(a, b);
+          _drawGlowPath(canvas, _partialPath(full, ballProgress));
         }
         continue;
       }
 
-      final path = _segmentPath(a, b);
-      // שכבה 1: זוהר רחב
-      canvas.drawPath(path, Paint()
-        ..color = diff.color.withOpacity(0.10)
-        ..strokeWidth = 28
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14));
-      // שכבה 2: זוהר בינוני
-      canvas.drawPath(path, Paint()
-        ..color = diff.color.withOpacity(0.25)
-        ..strokeWidth = 10
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
-      // שכבה 3: קו ברור
-      canvas.drawPath(path, Paint()
-        ..color = diff.color.withOpacity(0.85)
-        ..strokeWidth = 4
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round);
+      // גזרות אחרי הכדור — נעולות (מקוקו לנעול הראשון בלבד)
+      if (ballFromIdx != null && i > ballFromIdx!) {
+        if (i == firstLocked - 1) _drawDashed(canvas, a, b);
+        continue;
+      }
+
+      // גזרות שהכדור כבר עבר / גזרות רגילות
+      final segUnlocked = ls.isLevelUnlocked(diff, i) && ls.isLevelUnlocked(diff, i + 1);
+      if (segUnlocked) {
+        _drawGlowPath(canvas, _segmentPath(a, b));
+      } else if (i == firstLocked - 1) {
+        _drawDashed(canvas, a, b);
+      }
     }
 
     // ── כדור אנימציה ────────────────────────────────
