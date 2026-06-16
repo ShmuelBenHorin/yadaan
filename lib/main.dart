@@ -2251,12 +2251,7 @@ class _SeasonalBanner extends StatelessWidget {
   const _SeasonalBanner({required this.event});
 
   void _startQuiz(BuildContext ctx) {
-    Navigator.push(ctx, _slide(GameScreen(
-      diff: Diff.easy,
-      levelIndex: 0,
-      retryWith: event.questions,
-      isSeasonal: true,
-    )));
+    Navigator.push(ctx, _slide(_SeasonalLevelsScreen(event: event)));
   }
 
   @override
@@ -2312,12 +2307,113 @@ class _SeasonalBanner extends StatelessWidget {
             Text(event.title,
               style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
             const SizedBox(height: 2),
-            Text('${event.questions.length} שאלות · קש עכשיו',
+            Text('${event.levelCount} שלבים · ${event.questions.length} שאלות',
               style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12)),
           ])),
           const SizedBox(width: 8),
           Icon(Icons.arrow_back_ios_new_rounded, color: color, size: 16),
         ]),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  מסך שלבים סיזונאלי
+// ═══════════════════════════════════════════════
+class _SeasonalLevelsScreen extends StatelessWidget {
+  final SeasonalEvent event;
+  const _SeasonalLevelsScreen({required this.event});
+
+  String _levelEmoji(int level, int total) {
+    final pct = level / total;
+    if (pct < 0.35) return '🟢';
+    if (pct < 0.70) return '🟡';
+    return '🔴';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = event.color;
+    final count = event.levelCount;
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF060A1A),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context)),
+          title: Row(mainAxisSize: MainAxisSize.min, children: [
+            Text(event.emoji, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
+            Text(event.title,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+          ]),
+          centerTitle: true,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(children: [
+            // כותרת משנה
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withOpacity(0.3))),
+              child: Text('$count שלבים · ${event.questions.length} שאלות · מהקל לקשה',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700))),
+            const SizedBox(height: 16),
+            // גריד שלבים
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 1.4,
+                ),
+                itemCount: count,
+                itemBuilder: (ctx, i) {
+                  final qs = event.levelQuestions(i);
+                  final emoji = _levelEmoji(i, count);
+                  return GestureDetector(
+                    onTap: () => Navigator.push(ctx, _slide(GameScreen(
+                      diff: Diff.easy,
+                      levelIndex: i,
+                      retryWith: qs,
+                      isSeasonal: true,
+                    ))),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topRight, end: Alignment.bottomLeft,
+                          colors: [color.withOpacity(0.20), color.withOpacity(0.06)]),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: color.withOpacity(0.45), width: 1.4),
+                        boxShadow: [BoxShadow(color: color.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))]),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(emoji, style: const TextStyle(fontSize: 24)),
+                          const SizedBox(height: 6),
+                          Text('שלב ${i + 1}',
+                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 2),
+                          Text('${qs.length} שאלות',
+                            style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12)),
+                        ])));
+                },
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }

@@ -22,6 +22,15 @@ class SeasonalEvent {
     required this.questions,
   });
 
+  // ─── שלבים ───────────────────────────────────
+  static const _qPerLevel = 5;
+  int get levelCount => (questions.length / _qPerLevel).ceil();
+  List<Question> levelQuestions(int level) {
+    final start = level * _qPerLevel;
+    final end   = (start + _qPerLevel).clamp(0, questions.length);
+    return questions.sublist(start, end);
+  }
+
   Color get color {
     final hex = colorHex.replaceAll('#', '').padLeft(6, '0');
     return Color(int.parse('FF$hex', radix: 16));
