@@ -44,9 +44,17 @@ class Question {
 // ═══════════════════════════════════════════════
 class QRepo {
   static List<Question>? _e,_m,_h;
-  static List<Question> get easy   { _e??=_p(kEasy,   Diff.easy);   return _e!; }
-  static List<Question> get medium { _m??=_p(kMedium, Diff.medium); return _m!; }
-  static List<Question> get hard   { _h??=_p(kHard,   Diff.hard);   return _h!; }
+  // שאלות עונתיות שמוזרקות ע"י SeasonalService (mode=categories/both)
+  static List<Question> _seasonal = [];
+
+  static void setSeasonalQuestions(List<Question> questions) {
+    _seasonal = List.from(questions);
+    _e = null; _m = null; _h = null; // אפס cache כדי לכלול/להוציא עונתיות
+  }
+
+  static List<Question> get easy   { _e??=[..._p(kEasy,   Diff.easy),   ..._seasonal.where((q)=>q.diff==Diff.easy)];   return _e!; }
+  static List<Question> get medium { _m??=[..._p(kMedium, Diff.medium), ..._seasonal.where((q)=>q.diff==Diff.medium)]; return _m!; }
+  static List<Question> get hard   { _h??=[..._p(kHard,   Diff.hard),   ..._seasonal.where((q)=>q.diff==Diff.hard)];   return _h!; }
   static List<Question> _p(String j, Diff d) =>
       (jsonDecode(j) as List).map((e)=>Question.fromMap(e)).toList();
   static List<Question> forDiff(Diff d) => [easy,medium,hard][d.index];

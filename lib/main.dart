@@ -19,6 +19,8 @@ import 'interests_service.dart';
 import 'cloud_sync_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'config.dart';
+import 'theme_service.dart';
+import 'leaderboard_service.dart';
 import 'models/question.dart';
 import 'services/analytics.dart';
 import 'services/notification_service.dart';
@@ -139,6 +141,13 @@ class GameState extends ChangeNotifier {
   Future<void> _finish() async {
     _t?.cancel();
     if(_stars==Cfg.starsPerLevel)await Sfx.perfect();
+    // שמירת נתוני טבלת מובילים (ללא תלות ב-isSeasonal)
+    LeaderboardService.instance.recordLevel(
+      diff: diff,
+      correct: _answeredCorrect,
+      total: _originalTotal,
+      streak: UserStatsService.instance.streak,
+    );
     if(!isSeasonal){
       // שלבים עונתיים לא שומרים ב-LevelService (מונע זיהום שלבים רגילים)
       await LevelService.instance.save(diff,levelIdx,_stars);
@@ -195,6 +204,8 @@ void main() async {
   await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
   await UserStatsService.init(); await InterestsService.init(); await BagrutService.init(); await _EnergyOverlay.init(); await Sfx.init();
   SeasonalService.init(); // ברקע — לא מחכים
+  ThemeService.init();    // רקעים דינמיים מ-Firestore — ברקע
+  LeaderboardService.init(); // כניסה אנונימית ל-Firebase Auth לטבלת מובילים
   if (defaultTargetPlatform == TargetPlatform.android) await CloudSyncService.init();
   // כניסה יומית
   Analytics.dailyOpen(streak: UserStatsService.instance.streak);
@@ -573,7 +584,7 @@ class _AdRewardDialogState extends State<_AdRewardDialog>
         const SizedBox(height: 10),
         const Text('קבל 2 מוחות', style: TextStyle(color: Pal.tp, fontSize: 22, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        const Text('צפה בסרטון קצר', style: TextStyle(color: Pal.ts, fontSize: 13)),
+        const Text('צפה בפרסומת', style: TextStyle(color: Pal.ts, fontSize: 13)),
         const SizedBox(height: 22),
         _AdButton(
           loading: _loading, available: _rewardedAd != null,
@@ -982,6 +993,116 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+// ═══════════════════════════════════════════════
+//  NICKNAME DIALOG
+// ═══════════════════════════════════════════════
+class _NicknameDialog extends StatefulWidget {
+  const _NicknameDialog();
+  @override State<_NicknameDialog> createState() => _NicknameDialogState();
+}
+class _NicknameDialogState extends State<_NicknameDialog> {
+  final _ctrl = TextEditingController();
+  bool _saving = false;
+  String _error = '';
+
+  Future<void> _save() async {
+    final name = _ctrl.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'נא להזין כינוי');
+      return;
+    }
+    if (name.length < 2) {
+      setState(() => _error = 'כינוי קצר מדי');
+      return;
+    }
+    if (name.length > 20) {
+      setState(() => _error = 'מקסימום 20 תווים');
+      return;
+    }
+    setState(() { _saving = true; _error = ''; });
+    await LeaderboardService.instance.setDisplayName(name);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Dialog(
+        backgroundColor: const Color(0xFF0F1E3D),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('🏆', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 12),
+            const Text('בחר כינוי', textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _ctrl,
+              autofocus: true,
+              textAlign: TextAlign.center,
+              maxLength: 20,
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+              decoration: InputDecoration(
+                hintText: 'הכינוי שלך...',
+                hintStyle: const TextStyle(color: Color(0xFF4A5E80), fontSize: 16),
+                filled: true,
+                fillColor: const Color(0xFF1A2D52),
+                counterStyle: const TextStyle(color: Color(0xFF4A5E80), fontSize: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: const Color(0xFFFFD700).withOpacity(0.3))),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFFFD700), width: 1.5)),
+                errorText: _error.isEmpty ? null : _error,
+                errorStyle: const TextStyle(color: Color(0xFFFF6B6B), fontSize: 12),
+              ),
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: _saving ? null : () async {
+                    // דלג — שמור כינוי "אנונימי" זמני
+                    await LeaderboardService.instance.setDisplayName('שחקן אנונימי');
+                    if (mounted) Navigator.of(context).pop();
+                  },
+                  child: const Text('דלג', style: TextStyle(color: Color(0xFF7A90C0), fontSize: 15)))),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: GestureDetector(
+                  onTap: _saving ? null : _save,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF9F0A)]),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [BoxShadow(color: const Color(0xFFFFD700).withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 4))]),
+                    child: _saving
+                      ? const Center(child: SizedBox(width: 20, height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)))
+                      : const Text('אישור', textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w900)),
+                  ))),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  LEADERBOARD SCREEN
+// ═══════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────
 class _SettingsRow extends StatelessWidget {
   final IconData icon; final Color color; final String label; final VoidCallback onTap;
   const _SettingsRow({required this.icon, required this.color, required this.label, required this.onTap});
@@ -1128,7 +1249,20 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
     PurchaseService.instance.addListener((){if(mounted)setState((){});});
     UserStatsService.instance.addListener((){if(mounted)setState((){});});
     SeasonalService.instance.addListener((){if(mounted)setState((){});});
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkInterestAnnouncement());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkNickname();
+      _checkInterestAnnouncement();
+    });
+  }
+
+  Future<void> _checkNickname() async {
+    if (LeaderboardService.nameSet) return;
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _NicknameDialog(),
+    );
   }
 
   Future<void> _checkInterestAnnouncement() async {
@@ -1175,11 +1309,13 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height:20),
         // ── Content ──────────────────────────────────────────────────────────────────────────
         Expanded(child:SingleChildScrollView(padding:const EdgeInsets.symmetric(horizontal:20),child:Column(children:[
-          // ── אירועים עונתיים (חם עכשיו) ─────────────────────────────────────
-          ...SeasonalService.instance.activeEvents.map((event) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _SeasonalBanner(event: event),
-          )),
+          // ── אירועים עונתיים (חם עכשיו) — רק אירועי שלבים ───────────────────
+          ...SeasonalService.instance.activeEvents
+              .where((e) => e.hasLevels)
+              .map((event) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _SeasonalBanner(event: event),
+              )),
           _DiffCard(diff:Diff.easy),
           const SizedBox(height:12),
           _DiffCard(diff:Diff.medium),
@@ -1426,7 +1562,7 @@ class _StarsBar extends StatelessWidget {
   @override Widget build(BuildContext context){
     final ls=LevelService.instance;
     final all=ls.allStars;
-    final next=all<Cfg.starsToUnlockMedium?Cfg.starsToUnlockMedium:all<Cfg.starsToUnlockHard?Cfg.starsToUnlockHard:null;
+    final next=all<Cfg.starsToUnlockMedium?Cfg.starsToUnlockMedium:null; // קשה לא דורש כוכבים
     return Container(
       padding:const EdgeInsets.symmetric(horizontal:14,vertical:10),
       decoration:BoxDecoration(color:Pal.card.withOpacity(0.6),borderRadius:BorderRadius.circular(14),
@@ -1499,7 +1635,7 @@ class _SeasonalBanner extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                days == 0 ? 'היום בלבד!' : 'עוד $days ימים',
+                days == 0 ? 'היום בלבד!' : days == 1 ? 'מסתיים מחר!' : 'מסתיים עוד $days ימים',
                 style: TextStyle(color: color.withOpacity(0.8), fontSize: 11),
               ),
             ]),
@@ -1525,7 +1661,8 @@ class _SeasonalBanner extends StatelessWidget {
 class _SeasonalLevelsScreen extends StatefulWidget {
   final SeasonalEvent event;
   final int? highlightLevel;
-  const _SeasonalLevelsScreen({required this.event, this.highlightLevel});
+  final bool autoPlay; // כשנכנסים מ"השלב הבא" — מריץ אנימציה ואז פותח שלב אוטומטית
+  const _SeasonalLevelsScreen({required this.event, this.highlightLevel, this.autoPlay = false});
   @override State<_SeasonalLevelsScreen> createState() => _SeasonalLevelsScreenState();
 }
 class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
@@ -1538,8 +1675,14 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
   @override void initState() {
     super.initState();
     _stars = List.filled(widget.event.levelCount, 0);
-    _ballCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
-      ..addListener(() => setState(() {}));
+    _ballCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2700))
+      ..addListener(() => setState(() {}))
+      ..addStatusListener((status) {
+        // אחרי שהאנימציה הסתיימה — נכנסים לשלב אוטומטית
+        if (status == AnimationStatus.completed && widget.autoPlay && mounted) {
+          _launchNextLevel();
+        }
+      });
     _loadProgress();
   }
 
@@ -1547,6 +1690,26 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
     _scroll.dispose();
     _ballCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _launchNextLevel() async {
+    if (!mounted || widget.highlightLevel == null) return;
+    final lvl = widget.highlightLevel!;
+    if (lvl >= widget.event.levelCount) return;
+    if (!EnergyService.instance.has) {
+      Navigator.push(context, _slide(const NoEnergyScreen()));
+      return;
+    }
+    EnergyService.instance.spend(Cfg.energyCostWrong);
+    await Navigator.push(context, _slide(GameScreen(
+      diff: Diff.easy,
+      levelIndex: lvl,
+      retryWith: widget.event.levelQuestions(lvl),
+      isSeasonal: true,
+      seasonalEventId: widget.event.id,
+    )));
+    // אחרי חזרה — רענן כוכבים בלבד, ללא הפעלת אנימציה מחדש
+    _loadProgress();
   }
 
   void _scrollToHighlight(double viewportH) {
@@ -1560,7 +1723,10 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
       _scroll.animateTo(targetOffset,
           duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
       Future.delayed(const Duration(milliseconds: 700), () {
-        if (mounted) _ballCtrl.forward();
+        if (mounted) {
+          Sfx.ballTravel();
+          _ballCtrl.forward();
+        }
       });
     });
   }
@@ -1589,7 +1755,7 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
       child: Scaffold(
         backgroundColor: const Color(0xFF060A1A),
         body: Stack(children: [
-          const _MountainBg(),
+          ScreenBg('seasonal_${widget.event.id}'),
           SafeArea(child: Column(children: [
             Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Row(children: [
@@ -1622,7 +1788,7 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
               WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToHighlight(viewH));
               final ballFrom = widget.highlightLevel != null && widget.highlightLevel! > 0
                   ? widget.highlightLevel! - 1 : null;
-              final ballProg = CurvedAnimation(parent: _ballCtrl, curve: Curves.easeInOut).value;
+              final ballProg = CurvedAnimation(parent: _ballCtrl, curve: Curves.easeInOutCubic).value;
               return SingleChildScrollView(
                 controller: _scroll,
                 reverse: true,
@@ -1649,6 +1815,7 @@ class _SeasonalLevelsScreenState extends State<_SeasonalLevelsScreen>
                           stars: _stars[i],
                           unlocked: unlocked,
                           isNext: isNext,
+                          isAnimating: ballFrom != null, // הכדור עף — עצור glow
                           onTap: !unlocked ? null : () async {
                             if (!EnergyService.instance.has) {
                               Navigator.push(ctx, _slide(const NoEnergyScreen()));
@@ -1696,17 +1863,39 @@ class _SeasonalTrailPainter extends CustomPainter {
     );
   }
 
-  static Path _partialPath(Path full, double fraction) {
-    if (fraction <= 0) return Path();
-    if (fraction >= 1) return full;
-    final metric = full.computeMetrics().first;
-    return metric.extractPath(0, metric.length * fraction);
+  // מרכז ויזואלי של עיגול הצומת — 26(label)+4(gap)+30(radius)-55(top offset) = +5
+  static const _nodeCenter = Offset(0, 5);
+
+  // נקודות בקרה של הביזייר בין שתי צמתות
+  static List<Offset> _bezierCPs(Offset a, Offset b) {
+    final dy = a.dy - b.dy;
+    return [a, Offset(a.dx, a.dy - dy * 0.45), Offset(b.dx, b.dy + dy * 0.45), b];
   }
 
   Path _makePath(Offset a, Offset b) {
-    final dy = a.dy - b.dy;
-    return Path()..moveTo(a.dx, a.dy)
-      ..cubicTo(a.dx, a.dy - dy * 0.45, b.dx, b.dy + dy * 0.45, b.dx, b.dy);
+    final cps = _bezierCPs(a, b);
+    return Path()..moveTo(cps[0].dx, cps[0].dy)
+      ..cubicTo(cps[1].dx, cps[1].dy, cps[2].dx, cps[2].dy, cps[3].dx, cps[3].dy);
+  }
+
+  // De Casteljau split — מחזיר את תת-הביזייר מ-0 עד t בדיוק (אותה נוסחה כמו הכדור)
+  static Path _partialBezierPath(Offset a, Offset b, double t) {
+    if (t <= 0) return Path();
+    if (t >= 1) {
+      final cps = _bezierCPs(a, b);
+      return Path()..moveTo(cps[0].dx, cps[0].dy)
+        ..cubicTo(cps[1].dx, cps[1].dy, cps[2].dx, cps[2].dy, cps[3].dx, cps[3].dy);
+    }
+    final cps = _bezierCPs(a, b);
+    final p0 = cps[0], cp1 = cps[1], cp2 = cps[2], p3 = cps[3];
+    final p01  = Offset.lerp(p0,  cp1, t)!;
+    final p12  = Offset.lerp(cp1, cp2, t)!;
+    final p23  = Offset.lerp(cp2, p3,  t)!;
+    final p012 = Offset.lerp(p01, p12, t)!;
+    final p123 = Offset.lerp(p12, p23, t)!;
+    final tip  = Offset.lerp(p012, p123, t)!; // = _bezierPt(a,b,t) בדיוק
+    return Path()..moveTo(p0.dx, p0.dy)
+      ..cubicTo(p01.dx, p01.dy, p012.dx, p012.dy, tip.dx, tip.dy);
   }
 
   void _drawFullPath(Canvas canvas, Path path) {
@@ -1720,35 +1909,48 @@ class _SeasonalTrailPainter extends CustomPainter {
       ..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
   }
 
+  void _drawGrayPath(Canvas canvas, Path path) {
+    canvas.drawPath(path, Paint()
+      ..color = Colors.white.withOpacity(0.12)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round);
+  }
+
   @override void paint(Canvas canvas, Size size) {
+    // כל הנתיבים עוברים דרך מרכז הצומת הויזואלי (+nodeCenter)
+    final pts = positions.map((p) => p + _nodeCenter).toList();
+
+    // שלב א׳: קו אפור לכל הקטעים (רקע)
     for (int i = 0; i < count - 1; i++) {
-      final a = positions[i], b = positions[i + 1];
+      _drawGrayPath(canvas, _makePath(pts[i], pts[i + 1]));
+    }
+
+    // שלב ב׳: צביעה ירוקה על קטעים שהושלמו / הכדור עובר
+    for (int i = 0; i < count - 1; i++) {
+      final a = pts[i], b = pts[i + 1];
       final completed = stars.length > i && stars[i] > 0;
 
-      // גזרת הכדור — מצייר רק עד מיקום הכדור
+      // גזרת הכדור — De Casteljau עד t הנוכחי (סנכרון מושלם עם הכדור)
       if (ballFromIdx != null && i == ballFromIdx) {
         if (ballProgress > 0) {
-          _drawFullPath(canvas, _partialPath(_makePath(a, b), ballProgress));
+          _drawFullPath(canvas, _partialBezierPath(a, b, ballProgress));
         }
         continue;
       }
 
-      // גזרות אחרי הכדור — לא מציג כלום (נעול)
       if (ballFromIdx != null && i > ballFromIdx!) continue;
 
-      // גזרות שהכדור עבר / רגיל
-      final path = _makePath(a, b);
       if (completed) {
-        _drawFullPath(canvas, path);
+        _drawFullPath(canvas, _makePath(a, b));
       }
-      // לא מושלם ולא בהמשך לכדור — לא מציג קו (שלב נעול)
     }
 
-    // ── כדור אנימציה ──
-    if (ballFromIdx != null && ballProgress > 0 && ballFromIdx! + 1 < positions.length) {
-      const nodeCenter = Offset(0, 5);
-      final a = positions[ballFromIdx!] + nodeCenter;
-      final b = positions[ballFromIdx! + 1] + nodeCenter;
+    // ── כדור אנימציה — רק כשרץ ──
+    if (ballFromIdx != null && ballProgress > 0 && ballProgress < 1.0 &&
+        ballFromIdx! + 1 < positions.length) {
+      final a = pts[ballFromIdx!];
+      final b = pts[ballFromIdx! + 1];
       final pos = _bezierPt(a, b, ballProgress);
 
       const trailSteps = 8;
@@ -1781,10 +1983,11 @@ class _SeasonalTrailPainter extends CustomPainter {
 class _SeasonalTrailNode extends StatefulWidget {
   final int index, total, stars;
   final Color color;
-  final bool unlocked, isNext;
+  final bool unlocked, isNext, isAnimating;
   final VoidCallback? onTap;
   const _SeasonalTrailNode({required this.index, required this.total, required this.color,
-    required this.stars, required this.unlocked, required this.isNext, required this.onTap});
+    required this.stars, required this.unlocked, required this.isNext,
+    this.isAnimating = false, required this.onTap});
   @override State<_SeasonalTrailNode> createState() => _SeasonalTrailNodeState();
 }
 class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTickerProviderStateMixin {
@@ -1796,8 +1999,10 @@ class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTicke
   }
   @override void didUpdateWidget(_SeasonalTrailNode old) {
     super.didUpdateWidget(old);
-    if (widget.isNext && !old.isNext) _pulse.repeat(reverse: true);
+    if (widget.isNext && !old.isNext && !widget.isAnimating) _pulse.repeat(reverse: true);
     if (!widget.isNext && old.isNext) _pulse.stop();
+    if (widget.isAnimating && !old.isAnimating) _pulse.stop();
+    if (!widget.isAnimating && old.isAnimating && widget.isNext) _pulse.repeat(reverse: true);
   }
   @override void dispose() { _pulse.dispose(); super.dispose(); }
   @override Widget build(BuildContext context) {
@@ -1813,7 +2018,7 @@ class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTicke
     Widget topLabel;
     if (!widget.unlocked) {
       topLabel = const Icon(Icons.lock_rounded, color: Colors.white38, size: 14);
-    } else if (widget.isNext) {
+    } else if (widget.isNext && !widget.isAnimating) {
       topLabel = AnimatedBuilder(animation: _pulse, builder: (_, __) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
@@ -1840,10 +2045,10 @@ class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTicke
           AnimatedBuilder(
             animation: _pulse,
             builder: (_, __) {
-              final pv = widget.isNext ? _pulse.value : 0.0;
+              final pv = widget.isNext && !widget.isAnimating ? _pulse.value : 0.0;
               final locked = !widget.unlocked;
               return Stack(alignment: Alignment.center, children: [
-                if (widget.isNext) ...[
+                if (widget.isNext && !widget.isAnimating) ...[
                   Container(width: d + 30 + pv * 22, height: d + 30 + pv * 22,
                     decoration: BoxDecoration(shape: BoxShape.circle, color: c.withOpacity(0.07 * (1 - pv)))),
                   Container(width: d + 16 + pv * 12, height: d + 16 + pv * 12,
@@ -1852,11 +2057,14 @@ class _SeasonalTrailNodeState extends State<_SeasonalTrailNode> with SingleTicke
                 Container(width: d, height: d,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: locked ? Colors.white.withOpacity(0.05) : c.withOpacity(0.18),
+                    // רקע כהה מוצק + שכבת צבע — הצומת אטום לחלוטין
+                    color: locked
+                      ? const Color(0xFF1A2035)
+                      : Color.alphaBlend(c.withOpacity(0.55), const Color(0xFF0D1220)),
                     border: Border.all(
                       color: locked ? Colors.white24 : c,
                       width: 2.5),
-                    boxShadow: locked ? [] : [BoxShadow(color: c.withOpacity(0.35 + pv * 0.3), blurRadius: 12 + pv * 8)]),
+                    boxShadow: locked ? [] : [BoxShadow(color: c.withOpacity(0.30 + pv * 0.3), blurRadius: 12 + pv * 8)]),
                   child: Center(child: locked
                     ? const Icon(Icons.lock_rounded, color: Colors.white30, size: 22)
                     : Text(nodeEmoji, style: const TextStyle(fontSize: 20)))),
@@ -1943,7 +2151,7 @@ class _DiffCard extends StatelessWidget {
               ]),
               const SizedBox(height:4),
               Text(unlocked?'$earned/$maxS \u2B50'
-                :(isPrem?'\u05E6\u05E8\u05D9\u05DA \u05E4\u05E8\u05D5 + $need \u05DB\u05D5\u05DB\u05D1\u05D9\u05DD':'\u05E6\u05E8\u05D9\u05DA $need \u2B50 \u05DC\u05E4\u05EA\u05D9\u05D7\u05D4'),
+                :(isPrem?'\u05E6\u05E8\u05D9\u05DA \u05E4\u05E8\u05D5':'\u05E6\u05E8\u05D9\u05DA $need \u2B50 \u05DC\u05E4\u05EA\u05D9\u05D7\u05D4'),
                 textDirection:TextDirection.rtl,style:const TextStyle(color:Pal.ts,fontSize:12)),
               if(unlocked&&earned>0)...[const SizedBox(height:8),ClipRRect(borderRadius:BorderRadius.circular(4),
                 child:LinearProgressIndicator(value:earned/maxS,minHeight:4,backgroundColor:Pal.starOff,valueColor:AlwaysStoppedAnimation(diff.color)))],
@@ -1973,7 +2181,8 @@ double _lvlX(int idx, double w) {
 class LevelMapScreen extends StatefulWidget {
   final Diff diff;
   final int? highlightLevel; // אם מגיעים מסיום שלב — מודגש השלב הבא
-  const LevelMapScreen({super.key,required this.diff,this.highlightLevel});
+  final bool autoPlay; // אחרי אנימציה — כניסה אוטומטית לשלב
+  const LevelMapScreen({super.key,required this.diff,this.highlightLevel,this.autoPlay=false});
   @override State<LevelMapScreen> createState()=>_LevelMapScreenState();
 }
 class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProviderStateMixin {
@@ -1983,14 +2192,33 @@ class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProvid
 
   @override void initState() {
     super.initState();
-    _ballCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
-      ..addListener(() => setState(() {}));
+    _ballCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2700))
+      ..addListener(() => setState(() {}))
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed && widget.autoPlay && mounted) {
+          _launchNextLevel();
+        }
+      });
   }
 
   @override void dispose() {
     _scroll.dispose();
     _ballCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _launchNextLevel() async {
+    if (!mounted || widget.highlightLevel == null) return;
+    final lvl = widget.highlightLevel!;
+    if (lvl >= QRepo.levelCount(widget.diff)) return;
+    if (!EnergyService.instance.has) {
+      Navigator.push(context, _slide(const NoEnergyScreen()));
+      return;
+    }
+    EnergyService.instance.spend(Cfg.energyCostWrong);
+    await Navigator.push(context, _slide(GameScreen(diff: widget.diff, levelIndex: lvl)));
+    // אחרי חזרה — רענן ללא אנימציה מחדש
+    setState(() {});
   }
 
   void _scrollToHighlight(double mapH, double viewportH) {
@@ -2004,7 +2232,10 @@ class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProvid
           duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
       // אחרי שהמסך הסתדר — הפעל את כדור האנימציה
       Future.delayed(const Duration(milliseconds: 700), () {
-        if (mounted) _ballCtrl.forward();
+        if (mounted) {
+          Sfx.ballTravel();
+          _ballCtrl.forward();
+        }
       });
     });
   }
@@ -2020,7 +2251,7 @@ class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProvid
       int nextIdx=-1;
       for(int i=0;i<count;i++){if(ls.isLevelUnlocked(widget.diff,i)&&ls.starsFor(widget.diff,i)==0){nextIdx=i;break;}}
       return Scaffold(backgroundColor:const Color(0xFF060A1A),body:Stack(children:[
-        const _MountainBg(),
+        ScreenBg('levels_${widget.diff.name}'),
         SafeArea(child:Column(children:[
           Padding(padding:const EdgeInsets.fromLTRB(16,12,16,0),
             child:Row(children:[
@@ -2054,10 +2285,13 @@ class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProvid
                       positions:positions,count:count,ls:ls,diff:widget.diff,
                       ballFromIdx: widget.highlightLevel != null && widget.highlightLevel! > 0
                           ? widget.highlightLevel! - 1 : null,
-                      ballProgress: CurvedAnimation(parent:_ballCtrl,curve:Curves.easeInOut).value,
+                      ballProgress: CurvedAnimation(parent:_ballCtrl,curve:Curves.easeInOutCubic).value,
                     ))),
                   ...List.generate(count,(i){
                     final p=positions[i];
+                    final ballFrom = widget.highlightLevel != null && widget.highlightLevel! > 0
+                        ? widget.highlightLevel! - 1 : null;
+                    final ballAnimating = ballFrom != null && _ballCtrl.isAnimating;
                     return Positioned(
                       left:p.dx-40,top:p.dy-55,
                       child:_TrailNode(
@@ -2066,6 +2300,7 @@ class _LevelMapScreenState extends State<LevelMapScreen> with SingleTickerProvid
                         stars:ls.starsFor(widget.diff,i),
                         perfect:ls.starsFor(widget.diff,i)==Cfg.starsPerLevel,
                         isNext:i==nextIdx,
+                        isAnimating: ballAnimating,
                         lockLabel:(!ls.isLevelUnlocked(widget.diff,i)&&i>0&&i%Cfg.segmentSize==0)?ls.segmentProgress(widget.diff,i):"",
                         onTap:(){
                           if(!ls.isLevelUnlocked(widget.diff,i))return;
@@ -2180,19 +2415,34 @@ class _TrailPainter extends CustomPainter {
     );
   }
 
-  // ציור מסלול (בזייר) בין שתי נקודות
-  Path _segmentPath(Offset a, Offset b) {
+  static const _nodeCenter = Offset(0, 5);
+
+  static List<Offset> _bezierCPs(Offset a, Offset b) {
     final dy = a.dy - b.dy;
-    return Path()..moveTo(a.dx, a.dy)
-      ..cubicTo(a.dx, a.dy - dy*0.45, b.dx, b.dy + dy*0.45, b.dx, b.dy);
+    return [a, Offset(a.dx, a.dy - dy*0.45), Offset(b.dx, b.dy + dy*0.45), b];
   }
 
-  // מחזיר חלק מהנתיב (0..fraction מתוך 0..1)
-  static Path _partialPath(Path full, double fraction) {
-    if (fraction <= 0) return Path();
-    if (fraction >= 1) return full;
-    final metric = full.computeMetrics().first;
-    return metric.extractPath(0, metric.length * fraction);
+  Path _segmentPath(Offset a, Offset b) {
+    final cps = _bezierCPs(a, b);
+    return Path()..moveTo(cps[0].dx, cps[0].dy)
+      ..cubicTo(cps[1].dx, cps[1].dy, cps[2].dx, cps[2].dy, cps[3].dx, cps[3].dy);
+  }
+
+  // De Casteljau split — מחלק בדיוק ב-t כמו הכדור, ללא סטייה arc-length
+  static Path _partialBezierPath(Offset a, Offset b, double t) {
+    if (t <= 0) return Path();
+    final cps = _bezierCPs(a, b);
+    if (t >= 1) return Path()..moveTo(cps[0].dx, cps[0].dy)
+      ..cubicTo(cps[1].dx, cps[1].dy, cps[2].dx, cps[2].dy, cps[3].dx, cps[3].dy);
+    final p0 = cps[0]; final cp1 = cps[1]; final cp2 = cps[2]; final p3 = cps[3];
+    final p01  = Offset.lerp(p0,  cp1, t)!;
+    final p12  = Offset.lerp(cp1, cp2, t)!;
+    final p23  = Offset.lerp(cp2, p3,  t)!;
+    final p012 = Offset.lerp(p01, p12, t)!;
+    final p123 = Offset.lerp(p12, p23, t)!;
+    final tip  = Offset.lerp(p012, p123, t)!;
+    return Path()..moveTo(p0.dx, p0.dy)
+      ..cubicTo(p01.dx, p01.dy, p012.dx, p012.dy, tip.dx, tip.dy);
   }
 
   void _drawGlowPath(Canvas canvas, Path path) {
@@ -2224,46 +2474,53 @@ class _TrailPainter extends CustomPainter {
     }
   }
 
+  // קו אפור בסיסי לכל קטע (רקע — כמו ב-SeasonalTrailPainter)
+  void _drawGrayPath(Canvas canvas, Path path) {
+    canvas.drawPath(path, Paint()
+      ..color = Colors.white.withOpacity(0.12)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round);
+  }
+
   @override void paint(Canvas canvas, Size size) {
-    // מצא את הנעול הראשון
     int firstLocked = count;
     for (int i = 0; i < count; i++) {
       if (!ls.isLevelUnlocked(diff, i)) { firstLocked = i; break; }
     }
+    // כל הנתיבים עוברים דרך מרכז הצומת הויזואלי
+    final pts = positions.map((p) => p + _nodeCenter).toList();
 
+    // שלב א׳: קו אפור לכל הקטעים
     for (int i = 0; i < count - 1; i++) {
-      final a = positions[i], b = positions[i + 1];
+      _drawGrayPath(canvas, _segmentPath(pts[i], pts[i + 1]));
+    }
 
-      // גזרת הכדור — מצייר רק את החלק שהכדור כבר עבר
+    // שלב ב׳: צביעה צבעונית על קטעים שנפתחו / הכדור עובר
+    for (int i = 0; i < count - 1; i++) {
+      final a = pts[i], b = pts[i + 1];
+
+      // גזרת הכדור — De Casteljau בדיוק כמו הכדור
       if (ballFromIdx != null && i == ballFromIdx) {
         if (ballProgress > 0) {
-          final full = _segmentPath(a, b);
-          _drawGlowPath(canvas, _partialPath(full, ballProgress));
+          _drawGlowPath(canvas, _partialBezierPath(a, b, ballProgress));
         }
         continue;
       }
 
-      // גזרות אחרי הכדור — נעולות (מקוקו לנעול הראשון בלבד)
-      if (ballFromIdx != null && i > ballFromIdx!) {
-        if (i == firstLocked - 1) _drawDashed(canvas, a, b);
-        continue;
-      }
+      if (ballFromIdx != null && i > ballFromIdx!) continue;
 
-      // גזרות שהכדור כבר עבר / גזרות רגילות
       final segUnlocked = ls.isLevelUnlocked(diff, i) && ls.isLevelUnlocked(diff, i + 1);
       if (segUnlocked) {
         _drawGlowPath(canvas, _segmentPath(a, b));
-      } else if (i == firstLocked - 1) {
-        _drawDashed(canvas, a, b);
       }
     }
 
-    // ── כדור אנימציה ────────────────────────────────
-    if (ballFromIdx != null && ballProgress > 0 && ballFromIdx! + 1 < positions.length) {
-      // מרכז העיגול הוויזואלי = +5px ב-Y (26 label + 4 gap + 30 radius - 55 offset)
-      const nodeCenter = Offset(0, 5);
-      final a = positions[ballFromIdx!] + nodeCenter;
-      final b = positions[ballFromIdx! + 1] + nodeCenter;
+    // ── כדור אנימציה ──
+    if (ballFromIdx != null && ballProgress > 0 && ballProgress < 1.0 &&
+        ballFromIdx! + 1 < positions.length) {
+      final a = pts[ballFromIdx!];
+      final b = pts[ballFromIdx! + 1];
       final pos = _bezierPt(a, b, ballProgress);
 
       // זנב מהול (trail)
@@ -2304,11 +2561,12 @@ class _TrailPainter extends CustomPainter {
 class _TrailNode extends StatefulWidget {
   final Diff diff;final int index,stars;
   final bool unlocked,perfect,isNext;
+  final bool isAnimating; // הכדור עף — עצור glow
   final String lockLabel;
   final VoidCallback onTap;
   const _TrailNode({required this.diff,required this.index,required this.unlocked,
     required this.stars,required this.perfect,required this.isNext,
-    this.lockLabel="",required this.onTap});
+    this.isAnimating=false,this.lockLabel="",required this.onTap});
   @override State<_TrailNode> createState()=>_TrailNodeState();
 }
 class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMixin {
@@ -2316,7 +2574,14 @@ class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMi
   @override void initState(){
     super.initState();
     _pulse=AnimationController(vsync:this,duration:const Duration(milliseconds:1600));
-    if(widget.isNext)_pulse.repeat(reverse:true);
+    if(widget.isNext && !widget.isAnimating)_pulse.repeat(reverse:true);
+  }
+  @override void didUpdateWidget(_TrailNode old){
+    super.didUpdateWidget(old);
+    if(widget.isNext && !old.isNext && !widget.isAnimating)_pulse.repeat(reverse:true);
+    if(!widget.isNext && old.isNext)_pulse.stop();
+    if(widget.isAnimating && !old.isAnimating)_pulse.stop();
+    if(!widget.isAnimating && old.isAnimating && widget.isNext)_pulse.repeat(reverse:true);
   }
   @override void dispose(){_pulse.dispose();super.dispose();}
   @override Widget build(BuildContext context){
@@ -2327,7 +2592,7 @@ class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMi
       child:SizedBox(width:d+30,
         child:Column(mainAxisSize:MainAxisSize.min,children:[
           SizedBox(height:26,child:Center(child:
-            widget.isNext
+            widget.isNext && !widget.isAnimating
               ?AnimatedBuilder(animation:_pulse,builder:(_,__)=>Container(
                   padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),
                   decoration:BoxDecoration(
@@ -2345,9 +2610,9 @@ class _TrailNodeState extends State<_TrailNode> with SingleTickerProviderStateMi
           AnimatedBuilder(
             animation:_pulse,
             builder:(_,__){
-              final pv=widget.isNext?_pulse.value:0.0;
+              final pv=widget.isNext && !widget.isAnimating ?_pulse.value:0.0;
               return Stack(alignment:Alignment.center,children:[
-                if(widget.isNext)...[
+                if(widget.isNext && !widget.isAnimating)...[
                   Container(width:d+30+pv*22,height:d+30+pv*22,
                     decoration:BoxDecoration(shape:BoxShape.circle,color:nc.withOpacity(0.07*(1-pv)))),
                   Container(width:d+16+pv*12,height:d+16+pv*12,
@@ -2430,7 +2695,7 @@ class _DiffTransitionNode extends StatelessWidget {
           const SizedBox(width:10),
           Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             Text(nextDiff.label,style:TextStyle(color:unlocked?Pal.tp:Pal.ts,fontSize:14,fontWeight:FontWeight.w800)),
-            Text(unlocked?'לחץ לפתיחה ▶':'Need ${nextDiff==Diff.medium?Cfg.starsToUnlockMedium:Cfg.starsToUnlockHard} ⭐ to unlock',
+            Text(unlocked?'לחץ לפתיחה ▶':(nextDiff==Diff.hard?'צריך פרו':'צריך ${Cfg.starsToUnlockMedium} ⭐ לפתיחה'),
               style:TextStyle(color:unlocked?nextDiff.color:Pal.ts.withOpacity(0.6),fontSize:11)),
           ]),
         ])));
@@ -2515,6 +2780,9 @@ class _GS extends State<GameScreen> with TickerProviderStateMixin {
     final q=_gs.cur;
     return WillPopScope(onWillPop:_quit,
       child:Scaffold(backgroundColor:Pal.bg,body:Stack(children:[
+        widget.isSeasonal && widget.seasonalEventId != null
+          ? ScreenBg('seasonal_${widget.seasonalEventId}')
+          : ScreenBg('game_${widget.diff.name}'),
         const StarField(),
         SafeArea(child:Column(children:[
           // Top bar
@@ -2757,10 +3025,7 @@ class _IBSState extends State<_InterestBottomSheet> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFF2A3A55)),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Text('רוב השאלות יהיו ממה שבחרת',
-                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 12)),
-                const SizedBox(width: 6),
+              child: Row(mainAxisSize: MainAxisSize.min, textDirection: TextDirection.rtl, children: [
                 AnimatedCrossFade(
                   firstChild: const Text('קרא עוד',
                     style: TextStyle(color: Color(0xFF4D96FF), fontSize: 12, fontWeight: FontWeight.w700)),
@@ -2768,6 +3033,9 @@ class _IBSState extends State<_InterestBottomSheet> {
                     style: TextStyle(color: Color(0xFF4D96FF), fontSize: 12, fontWeight: FontWeight.w700)),
                   crossFadeState: _expanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                   duration: const Duration(milliseconds: 150)),
+                const SizedBox(width: 6),
+                const Text('רוב השאלות יהיו ממה שבחרת',
+                  style: TextStyle(color: Color(0xFF90A4AE), fontSize: 12)),
               ]),
             ),
             AnimatedCrossFade(
@@ -2984,6 +3252,19 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
     return n < QRepo.levelCount(widget.diff) && LevelService.instance.isLevelUnlocked(widget.diff, n);
   }
 
+  // האם יש שלב עונתי הבא
+  SeasonalEvent? get _seasonalEvent {
+    if (widget.seasonalEventId == null) return null;
+    final events = SeasonalService.instance.activeEvents;
+    if (events.isEmpty) return null;
+    try { return events.firstWhere((e) => e.id == widget.seasonalEventId); }
+    catch (_) { return events.first; }
+  }
+  bool get _canNextSeasonal {
+    final ev = _seasonalEvent;
+    return ev != null && widget.levelIndex + 1 < ev.levelCount;
+  }
+
   @override Widget build(BuildContext context) {
     final perfect = widget.stars == Cfg.starsPerLevel;
     return Scaffold(backgroundColor: Pal.bg, body: Stack(children: [
@@ -3068,7 +3349,24 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
                   _bigBtn('השלב הבא ▶', widget.diff.color, () {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      _levelAdvanceRoute(LevelMapScreen(diff: widget.diff, highlightLevel: widget.levelIndex + 1)),
+                      _levelAdvanceRoute(LevelMapScreen(
+                        diff: widget.diff,
+                        highlightLevel: widget.levelIndex + 1,
+                        autoPlay: true)), // אנימציה → כניסה אוטומטית לשלב
+                      (r) => r.isFirst);
+                  }),
+                  const SizedBox(height: 14),
+                ],
+                if (widget.isSeasonal && _canNextSeasonal) ...[
+                  _bigBtn('השלב הבא ▶', const Color(0xFF4CAF50), () {
+                    final ev = _seasonalEvent;
+                    if (ev == null) return;
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      _levelAdvanceRoute(_SeasonalLevelsScreen(
+                        event: ev,
+                        highlightLevel: widget.levelIndex + 1,
+                        autoPlay: true)), // אנימציה → כניסה אוטומטית לשלב
                       (r) => r.isFirst);
                   }),
                   const SizedBox(height: 14),
@@ -3077,23 +3375,24 @@ class _CS extends State<CompleteScreen> with TickerProviderStateMixin {
                   widget.isSeasonal ? '⚽  חזרה לשלבים' : '🗺️  מפת שלבים',
                   () {
                     if (widget.isSeasonal) {
-                      // חזרה למסך שלבי המונדיאל עם הדגשת השלב הבא
-                      final events = SeasonalService.instance.activeEvents;
-                      final event = events.firstWhere(
-                        (e) => e.id == widget.seasonalEventId,
-                        orElse: () => events.first);
-                      Navigator.pushAndRemoveUntil(
+                      final ev = _seasonalEvent;
+                      if (ev == null) { Navigator.pop(context); return; }
+                      final nextLvl = widget.levelIndex + 1 < ev.levelCount
+                          ? widget.levelIndex + 1 : widget.levelIndex;
+                      // popUntil מחזיר לשלבי המונדיאל שכבר בסטאק
+                      Navigator.popUntil(context, (r) => r.isFirst);
+                      Navigator.push(
                         context,
                         _levelAdvanceRoute(_SeasonalLevelsScreen(
-                          event: event,
-                          highlightLevel: widget.levelIndex + 1 < event.levelCount
-                              ? widget.levelIndex + 1 : widget.levelIndex)),
-                        (r) => r.isFirst);
+                          event: ev,
+                          highlightLevel: nextLvl)));
                     } else {
-                      // חזרה למפת השלבים של הרמה הנוכחית
+                      // חזרה למפת השלבים — עם אנימציה לשלב הבא
                       Navigator.pushAndRemoveUntil(
                         context,
-                        _slide(LevelMapScreen(diff: widget.diff)),
+                        _levelAdvanceRoute(LevelMapScreen(
+                          diff: widget.diff,
+                          highlightLevel: _canNext ? widget.levelIndex + 1 : null)),
                         (r) => r.isFirst);
                     }
                   },

@@ -10,6 +10,13 @@ class SeasonalEvent {
   final DateTime from, until;
   final int order;
   final List<Question> questions;
+  /// 'levels'     — מסך שלבים בלבד (ברירת מחדל)
+  /// 'categories' — שאלות נכנסות לפול הקל/בינוני/קשה הרגיל
+  /// 'both'       — גם שלבים וגם קטגוריות
+  final String mode;
+
+  bool get hasLevels     => mode == 'levels'     || mode == 'both';
+  bool get hasCategories => mode == 'categories' || mode == 'both';
 
   const SeasonalEvent({
     required this.id,
@@ -20,6 +27,7 @@ class SeasonalEvent {
     required this.until,
     required this.order,
     required this.questions,
+    this.mode = 'levels',
   });
 
   // ─── שלבים ───────────────────────────────────
@@ -60,11 +68,21 @@ class SeasonalService extends ChangeNotifier {
     return list;
   }
 
+  // מזריק שאלות עונתיות לפול הקטגוריות הרגיל (mode=categories/both)
+  void _updateCategoriesPool() {
+    final injected = activeEvents
+        .where((e) => e.hasCategories)
+        .expand((e) => e.questions)
+        .toList();
+    QRepo.setSeasonalQuestions(injected);
+  }
+
   static Future<void> init() async {
     // שאלות קשועות בקוד — מיידיות, ללא Firestore
     _i._events = _hardcodedEvents();
     await _i._loadCached();   // דריסה/מיזוג עם cache אם יש
     _i._loaded = true;
+    _i._updateCategoriesPool();
     _i.notifyListeners();
     _i._fetchFromFirestore(); // רענון ברקע — Firestore גובר על הקשועות
   }
@@ -328,6 +346,7 @@ class SeasonalService extends ChangeNotifier {
           until:    until,
           order:    (data['order']   as int?) ?? 0,
           questions: questions,
+          mode:     data['mode']     ?? 'levels',
         ));
       }
 
@@ -338,6 +357,7 @@ class SeasonalService extends ChangeNotifier {
           .toList();
       _events = [...hardcoded, ...events];
       _loaded = true;
+      _updateCategoriesPool();
       await _saveCache(_events);
       notifyListeners();
     } catch (e) {
@@ -374,6 +394,7 @@ class SeasonalService extends ChangeNotifier {
     'from':  e.from.millisecondsSinceEpoch,
     'until': e.until.millisecondsSinceEpoch,
     'order': e.order,
+    'mode':  e.mode,
     'questions': e.questions.map((q) => {
       'id': q.id, 'category': q.category, 'q': q.q,
       'a': q.a, 'c': q.c, 'd': q.diff.index + 1, 'f': q.f,
@@ -388,6 +409,7 @@ class SeasonalService extends ChangeNotifier {
     from:     DateTime.fromMillisecondsSinceEpoch(m['from'] as int),
     until:    DateTime.fromMillisecondsSinceEpoch(m['until'] as int),
     order:    m['order'] as int,
+    mode:     (m['mode'] as String?) ?? 'levels',
     questions: (m['questions'] as List)
         .map((q) => Question.fromMap(q as Map<String, dynamic>))
         .toList(),

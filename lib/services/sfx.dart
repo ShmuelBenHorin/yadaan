@@ -61,6 +61,20 @@ class Sfx {
     }
   }
 
+  // 🎯 כדור עולה — גלישת תדר מ-200Hz ל-1100Hz לאורך כל הנסיעה
+  static Future<void> ballTravel() async {
+    if (muted) return;
+    playWebTone([
+      // שתי שכבות גלישה מקבילות מ-t=0 (overlap=true על הראשונה)
+      {'freq': 200,  'glide': 1100, 'dur': 2.70, 'vol': 0.20, 'type': 'sine',     'attack': 0.12, 'decay': false, 'overlap': true},
+      {'freq': 400,  'glide': 2200, 'dur': 2.70, 'vol': 0.07, 'type': 'triangle', 'attack': 0.15, 'decay': false},
+      // אקורד נחיתה ב-t=2.70 (כשהכדור מגיע)
+      {'freq': 1047, 'dur': 0.45, 'vol': 0.30, 'type': 'sine', 'attack': 0.02, 'overlap': true},
+      {'freq': 1319, 'dur': 0.45, 'vol': 0.18, 'type': 'sine', 'attack': 0.02},
+    ]);
+    if (!kIsWeb) await HapticFeedback.lightImpact();
+  }
+
   // 🚀 עליית שלב — ארפג'יו עולה חגיגי
   static Future<void> levelUp() async {
     if (muted) return;

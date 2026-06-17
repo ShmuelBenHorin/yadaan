@@ -144,105 +144,105 @@ class CloudSyncService extends ChangeNotifier {
 // ═══════════════════════════════════════════════
 //  UI — כפתור Sign-In קומפקטי (TopBar)
 // ═══════════════════════════════════════════════
-class CloudSyncChip extends StatelessWidget {
+class CloudSyncChip extends StatefulWidget {
   const CloudSyncChip({super.key});
+  @override State<CloudSyncChip> createState() => _CloudSyncChipState();
+}
+
+class _CloudSyncChipState extends State<CloudSyncChip> {
+  @override
+  void initState() {
+    super.initState();
+    CloudSyncService.instance.addListener(_rebuild);
+  }
+  @override void dispose() { CloudSyncService.instance.removeListener(_rebuild); super.dispose(); }
+  void _rebuild() { if (mounted) setState(() {}); }
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: CloudSyncService.instance,
-      builder: (ctx, _) {
-        final svc = CloudSyncService.instance;
-        if (svc.syncing) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A2E6E),
-              borderRadius: BorderRadius.circular(10)),
-            child: const SizedBox(
-              width: 14, height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)));
-        }
-        if (svc.isSignedIn) {
-          return GestureDetector(
-            onTap: () => _showSignedInMenu(ctx, svc),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A3A1A),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFF2ECC71).withOpacity(0.5))),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                svc.photoUrl != null
-                  ? ClipOval(child: Image.network(svc.photoUrl!, width: 18, height: 18, fit: BoxFit.cover))
-                  : const Icon(Icons.check_circle, color: Color(0xFF2ECC71), size: 16),
-                const SizedBox(width: 5),
-                const Text('מסונכרן', style: TextStyle(color: Color(0xFF2ECC71), fontSize: 11, fontWeight: FontWeight.w700)),
-              ])));
-        }
-        return GestureDetector(
-          onTap: () => _signIn(ctx, svc),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A2E6E),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF4D96FF).withOpacity(0.4))),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.sync, color: Color(0xFF4D96FF), size: 14),
-              SizedBox(width: 5),
-              Text('סנכרן', style: TextStyle(color: Color(0xFF4D96FF), fontSize: 11, fontWeight: FontWeight.w700)),
-            ])));
-      },
-    );
+    final svc = CloudSyncService.instance;
+    if (svc.syncing) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(color: const Color(0xFF1A2E6E), borderRadius: BorderRadius.circular(10)),
+        child: const SizedBox(width: 14, height: 14,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)));
+    }
+    if (svc.isSignedIn) {
+      return GestureDetector(
+        onTap: () => _showSignedInMenu(svc),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A3A1A), borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF2ECC71).withOpacity(0.5))),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            svc.photoUrl != null
+              ? ClipOval(child: Image.network(svc.photoUrl!, width: 18, height: 18, fit: BoxFit.cover))
+              : const Icon(Icons.check_circle, color: Color(0xFF2ECC71), size: 16),
+            const SizedBox(width: 5),
+            const Text('מגובה', style: TextStyle(color: Color(0xFF2ECC71), fontSize: 11, fontWeight: FontWeight.w700)),
+          ])));
+    }
+    return GestureDetector(
+      onTap: _signIn,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A2E6E), borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF4D96FF).withOpacity(0.4))),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.cloud_upload_outlined, color: Color(0xFF4D96FF), size: 14),
+          SizedBox(width: 5),
+          Text('שמור התקדמות', style: TextStyle(color: Color(0xFF4D96FF), fontSize: 11, fontWeight: FontWeight.w700)),
+        ])));
   }
 
-  Future<void> _signIn(BuildContext ctx, CloudSyncService svc) async {
+  Future<void> _signIn() async {
+    final svc = CloudSyncService.instance;
     final ok = await svc.signIn();
-    if (!ok || !ctx.mounted) return;
+    if (!ok || !mounted) return;
 
-    // בדוק אם יש נתונים בענן
     final hasCloud = await svc.hasCloudData();
-    if (!ctx.mounted) return;
+    if (!mounted) return;
 
     if (hasCloud) {
       final restore = await showDialog<bool>(
-        context: ctx,
+        context: context,
         builder: (_) => Directionality(
           textDirection: TextDirection.rtl,
           child: AlertDialog(
             backgroundColor: const Color(0xFF0F2044),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: const Text('נמצאה התקדמות שמורה', style: TextStyle(color: Colors.white, fontSize: 17)),
-            content: const Text('נמצאה התקדמות שמורה בענן. האם לשחזר אותה?',
+            content: const Text('יש לך התקדמות שמורה בענן. האם לשחזר אותה?',
               style: TextStyle(color: Color(0xFF7A90C0), fontSize: 14)),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false),
+              TextButton(onPressed: () => Navigator.pop(context, false),
                 child: const Text('לא תודה', style: TextStyle(color: Color(0xFF7A90C0)))),
-              ElevatedButton(onPressed: () => Navigator.pop(ctx, true),
+              ElevatedButton(onPressed: () => Navigator.pop(context, true),
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFD700), foregroundColor: Colors.black),
                 child: const Text('שחזר', style: TextStyle(fontWeight: FontWeight.w800))),
             ])));
+      if (!mounted) return;
       if (restore == true) {
         await svc.restoreProgress();
-        if (ctx.mounted) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            const SnackBar(content: Text('✅ ההתקדמות שוחזרה בהצלחה')));
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ ההתקדמות שוחזרה בהצלחה')));
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ מחובר — ההתקדמות תגובה אוטומטית')));
       }
     } else {
-      // אין נתונים בענן — שמור את הנוכחי
       await svc.saveProgress();
-      if (ctx.mounted) {
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('✅ ההתקדמות שמורה בענן')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ ההתקדמות שמורה בענן')));
     }
   }
 
-  void _showSignedInMenu(BuildContext ctx, CloudSyncService svc) {
+  void _showSignedInMenu(CloudSyncService svc) {
     showModalBottomSheet(
-      context: ctx,
+      context: context,
       backgroundColor: const Color(0xFF0F2044),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => Directionality(
@@ -255,19 +255,23 @@ class CloudSyncChip extends StatelessWidget {
             Text('מחובר כ-${svc.displayName ?? ""}',
               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 4),
-            const Text('ההתקדמות שלך מסונכרנת אוטומטית',
+            const Text('ההתקדמות שלך מגובה אוטומטית אחרי כל שלב',
               style: TextStyle(color: Color(0xFF7A90C0), fontSize: 13)),
             const SizedBox(height: 20),
             SizedBox(width: double.infinity,
               child: ElevatedButton(
-                onPressed: () async { Navigator.pop(ctx); await svc.saveProgress();
-                  if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('✅ ההתקדמות עודכנה בענן'))); },
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await svc.saveProgress();
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('✅ ההתקדמות עודכנה בענן')));
+                },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B3A6B), foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: const Text('סנכרן עכשיו'))),
+                child: const Text('גבה עכשיו'))),
             const SizedBox(height: 10),
             TextButton(
-              onPressed: () async { Navigator.pop(ctx); await svc.signOut(); },
+              onPressed: () async { Navigator.pop(context); await svc.signOut(); },
               child: const Text('התנתק', style: TextStyle(color: Color(0xFF7A90C0)))),
           ]))));
   }

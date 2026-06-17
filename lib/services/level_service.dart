@@ -24,7 +24,7 @@ class LevelService extends ChangeNotifier {
   bool isDiffUnlocked(Diff d) {
     if (d==Diff.easy) return true;
     if (d==Diff.medium) return allStars>=Cfg.starsToUnlockMedium;
-    return PurchaseService.instance.isPremium && allStars>=Cfg.starsToUnlockHard;
+    return PurchaseService.instance.isPremium; // כוכבים לא נדרשים לפתיחת קשה
   }
   bool isLevelUnlocked(Diff d,int idx) {
     if (!isDiffUnlocked(d)) return false;

@@ -40,6 +40,7 @@ Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.17+62`
 | `lib/user_stats.dart` | `UserStatsService` — XP, streak, רמות. `playedToday` getter |
 | `lib/interests_service.dart` | `InterestsService` — פילטור קטגוריות |
 | `lib/cloud_sync_service.dart` | `CloudSyncService` — Google Drive backup (Android) |
+| `lib/leaderboard_service.dart` | `LeaderboardService` — Firebase Anonymous Auth + איסוף נתוני טבלת מובילים |
 | `lib/questions_easy/medium/hard.dart` | JSON strings (`kEasy`, `kMedium`, `kHard`) |
 | `lib/questions_bagrut.dart` | JSON string (`kBagrut`) |
 | `ios/Runner/AppDelegate.swift` | iCloud KV MethodChannel (`icloud_kv`) |
@@ -51,6 +52,11 @@ Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.17+62`
 - **State management**: `ChangeNotifier` singletons — `PurchaseService`, `LevelService`, `EnergyService`, `BagrutService`, `UserStatsService`, `SeasonalService`
 - **Questions**: Dart `const String` עם JSON משובץ + Firestore (עונתי)
 - **Persistence**: `SharedPreferences` בלבד — חוץ מ-seasonal cache
+- **Leaderboard**: Firebase Anonymous Auth + Firestore `users/{uid}` — `LeaderboardService.init()` ב-startup, `recordLevel()` ב-`GameState._finish()`
+  - Nickname dialog (`_NicknameDialog`) — מוצג בפעם הראשונה בHomeScreen אם `leaderboard_name_set` לא קיים ב-SharedPreferences
+  - הכינוי נשמר ב-`leaderboard_display_name` (SharedPreferences) + `users/{uid}.display_name` (Firestore)
+  - ⚠️ מסך הטבלה (`LeaderboardScreen`) **לא בנוי עדיין** — יתווסף כשיהיו מספיק שחקנים
+  - `fetchTop50()` ו-`fetchMyEntry()` כבר מוכנים ב-leaderboard_service.dart לשימוש עתידי
 - **IAP**: RevenueCat (`purchases_flutter`) — entitlement: `'premium'`
 
 ## Sound Mute
