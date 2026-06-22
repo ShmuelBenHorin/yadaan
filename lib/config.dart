@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 //  CONFIG
 // ═══════════════════════════════════════════════
 class Cfg {
+  /// גרסה נוכחית — חייב להתאים ל-version ב-pubspec.yaml (ללא build number)
+  static const currentVersion        = '1.7.19';
+
   static const rcAndroid            = 'goog_uYtvWookyMtAzQQXtOyGOETNCXz';
   static const rciOS                = 'appl_DSEyAVZKuOktZXgzNqiPKhjnOlO';
   static const entitlement          = 'premium';

@@ -30,9 +30,90 @@ import 'services/energy_service.dart';
 import 'services/level_service.dart';
 import 'services/mistakes_service.dart';
 import 'services/icloud_kv.dart';
+import 'services/force_update_service.dart';
 
 part 'bagrut_screen.dart';
 part 'seasonal_service.dart';
+
+// ═══════════════════════════════════════════════
+//  FORCE UPDATE SCREEN
+// ═══════════════════════════════════════════════
+class ForceUpdateScreen extends StatelessWidget {
+  const ForceUpdateScreen({super.key});
+
+  static const _androidUrl =
+      'https://play.google.com/store/apps/details?id=com.shmuelbenhorin.yidaan';
+  // החלף את ID_PLACEHOLDER במזהה האפליקציה ב-App Store
+  static const _iosUrl =
+      'https://apps.apple.com/app/idID_PLACEHOLDER';
+
+  Future<void> _openStore() async {
+    final url = defaultTargetPlatform == TargetPlatform.iOS
+        ? _iosUrl
+        : _androidUrl;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: Pal.bg,
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('🚀', style: TextStyle(fontSize: 64)),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'עדכון נדרש',
+                      style: TextStyle(
+                        color: Pal.tp,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'יש גרסה חדשה של ידען!\nאנא עדכן כדי להמשיך לשחק.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Pal.ts, fontSize: 16, height: 1.5),
+                    ),
+                    const SizedBox(height: 36),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _openStore,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Pal.accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        child: const Text(
+                          'עדכן עכשיו',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 // ═══════════════════════════════════════════════
 //  GAME STATE
@@ -223,11 +304,13 @@ void main() async {
   }
   final _prefs = await SharedPreferences.getInstance();
   final showOnboarding = !(_prefs.getBool('onboarding_done') ?? false);
-  runApp(App(showOnboarding: showOnboarding));
+  final forceUpdate = await ForceUpdateService.isUpdateRequired(Cfg.currentVersion);
+  runApp(App(showOnboarding: showOnboarding, forceUpdate: forceUpdate));
 }
 class App extends StatefulWidget {
   final bool showOnboarding;
-  const App({super.key, required this.showOnboarding});
+  final bool forceUpdate;
+  const App({super.key, required this.showOnboarding, this.forceUpdate = false});
   @override State<App> createState()=>_AppState();
 }
 class _AppState extends State<App> with WidgetsBindingObserver {
@@ -254,7 +337,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       builder:(_,__)=>MaterialApp(title:'\u05D9\u05D3\u05E2\u05DF',debugShowCheckedModeBanner:false,
         theme:ThemeData.dark().copyWith(scaffoldBackgroundColor:Pal.bg,useMaterial3:true),
         routes: {'/home': (_) => const HomeScreen()},
-        home:widget.showOnboarding ? const OnboardingScreen() : const HomeScreen()));
+        home: widget.forceUpdate
+            ? const ForceUpdateScreen()
+            : widget.showOnboarding
+                ? const OnboardingScreen()
+                : const HomeScreen()));
   }
 }
 
@@ -1293,6 +1380,21 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
               child:ShaderMask(shaderCallback:(b)=>const LinearGradient(colors:[Pal.gold,Color(0xFFFF9F0A)]).createShader(b),
                 child:const Text('ידען',style:TextStyle(fontSize:36,fontWeight:FontWeight.w900,color:Colors.white,letterSpacing:3)))),
             const Spacer(),
+            // ── K/D ─────────────────────────────────────────────────────────
+            Container(
+              padding:const EdgeInsets.symmetric(horizontal:10,vertical:6),
+              decoration:BoxDecoration(
+                color:const Color(0xFF4D96FF).withOpacity(0.12),
+                borderRadius:BorderRadius.circular(10),
+                border:Border.all(color:const Color(0xFF4D96FF).withOpacity(0.3)),
+              ),
+              child:Row(mainAxisSize:MainAxisSize.min,children:[
+                const Text('🎯',style:TextStyle(fontSize:14)),
+                const SizedBox(width:4),
+                Text(UserStatsService.instance.kdDisplay,
+                  style:const TextStyle(color:Color(0xFF4D96FF),fontSize:13,fontWeight:FontWeight.w800)),
+              ])),
+            const SizedBox(width:8),
             GestureDetector(
               onTap:()=>Navigator.push(context,_slide(const ProfileScreen())),
               child:Container(
@@ -1306,7 +1408,7 @@ class _HS extends State<HomeScreen> with TickerProviderStateMixin {
         const SizedBox(height:14),
         // ── Stars bar ────────────────────────────────────────────────────────────────────
         Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:_StarsBar()),
-        const SizedBox(height:20),
+        const SizedBox(height:16),
         // ── Content ──────────────────────────────────────────────────────────────────────────
         Expanded(child:SingleChildScrollView(padding:const EdgeInsets.symmetric(horizontal:20),child:Column(children:[
           // ── אירועים עונתיים (חם עכשיו) — רק אירועי שלבים ───────────────────

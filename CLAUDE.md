@@ -5,7 +5,7 @@
 
 ## App Overview
 Flutter trivia app (Hebrew, RTL). iOS + Android. Monetized via RevenueCat IAP (Pro tier).
-Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.18+64`
+Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.19+65`
 
 ## Key Files
 
@@ -21,6 +21,7 @@ Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.18+64`
 |------|-------|---------|
 | `analytics.dart` | `Analytics` | Firebase Analytics |
 | `notification_service.dart` | `NotificationService` | Push notifications (energy + streak) |
+| `force_update_service.dart` | `ForceUpdateService` | עדכון כפוי — קורא `min_version` מ-Firestore |
 | `sfx.dart` | `Sfx` | צלילי משחק + `mutedNotifier` (ValueNotifier) |
 | `purchase_service.dart` | `PurchaseService` | RevenueCat IAP |
 | `energy_service.dart` | `EnergyService` | מערכת אנרגיה + `checkRecharge()` |
@@ -58,6 +59,24 @@ Bundle: `com.shmuelbenhorin.yidaan` | Current version: `1.7.18+64`
   - ⚠️ מסך הטבלה (`LeaderboardScreen`) **לא בנוי עדיין** — יתווסף כשיהיו מספיק שחקנים
   - `fetchTop50()` ו-`fetchMyEntry()` כבר מוכנים ב-leaderboard_service.dart לשימוש עתידי
 - **IAP**: RevenueCat (`purchases_flutter`) — entitlement: `'premium'`
+
+## Force Update
+`ForceUpdateService` ב-`lib/services/force_update_service.dart`:
+- קורא `config/app_settings.min_version` מ-Firestore בכל עליית אפליקציה
+- משווה ל-`Cfg.currentVersion` (מוגדר ב-`lib/config.dart`)
+- אם הגרסה הנוכחית נמוכה → מוצג `ForceUpdateScreen` (חסום, ללא אפשרות סגירה)
+- כישלון רשת → לא חוסמים (fail gracefully)
+
+**כדי לכפות עדכון לכל המשתמשים:**
+1. ב-Firebase Console → Firestore → `config` → `app_settings`
+2. הגדר `min_version` (String) לגרסה **חדשה** מ-`1.7.18`, למשל `"1.7.19"`
+3. כל משתמש עם גרסה ישנה יראה את מסך העדכון הכפוי
+
+**כדי לבטל כפייה:** מחק את השדה `min_version` או הגדר אותו לגרסה ≤ `1.7.18`.
+
+**⚠️ חשוב:** בכל גרסה חדשה — עדכן את `Cfg.currentVersion` ב-`lib/config.dart`.
+
+**iOS App Store URL:** עדכן את `ForceUpdateScreen._iosUrl` עם מזהה האפליקציה מ-App Store Connect.
 
 ## Sound Mute
 `Sfx.mutedNotifier` — `ValueNotifier<bool>` נשמר ב-SharedPreferences (`sfx_muted`).
