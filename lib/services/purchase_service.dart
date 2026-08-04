@@ -36,8 +36,16 @@ class PurchaseService extends ChangeNotifier {
       await Purchases.setLogLevel(LogLevel.debug);
       await Purchases.configure(PurchasesConfiguration(
         defaultTargetPlatform==TargetPlatform.iOS?Cfg.rciOS:Cfg.rcAndroid));
+      final appUserId=await Purchases.appUserID;
+      debugPrint('RC init — APP USER ID: $appUserId');
       final ci=await Purchases.getCustomerInfo();
+      debugPrint('RC init — looking for entitlement: "${Cfg.entitlement}"');
+      debugPrint('RC init — all entitlements returned: ${ci.entitlements.all.keys}');
+      debugPrint('RC init — active entitlements: ${ci.entitlements.active.keys}');
       _i._pro=ci.entitlements.all[Cfg.entitlement]?.isActive??false;
+      // fallback: אם השם המדויק לא נמצא — בדוק אם יש בכלל entitlement פעיל
+      if(!_i._pro && ci.entitlements.active.isNotEmpty) _i._pro=true;
+      debugPrint('RC init — isPremium result: ${_i._pro}');
       if(_i._pro){ _onProActivated?.call(); }
       _i.notifyListeners();
     }catch(e){debugPrint('RC:$e');}

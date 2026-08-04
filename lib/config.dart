@@ -10,7 +10,7 @@ class Cfg {
 
   static const rcAndroid            = 'goog_uYtvWookyMtAzQQXtOyGOETNCXz';
   static const rciOS                = 'appl_DSEyAVZKuOktZXgzNqiPKhjnOlO';
-  static const entitlement          = 'premium';
+  static const entitlement          = 'yadaan Pro';
   static const devCode              = 'shmuel1231';
   static const mockPremium          = false;
   static const adMobEnabled         = true;

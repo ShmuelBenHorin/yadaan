@@ -526,7 +526,7 @@ class BagrutMainScreen extends StatelessWidget {
               icon:const Icon(Icons.tune_rounded,color:_textS),
               onPressed:()=>Navigator.push(ctx,_bagRoute(const BagrutTrackSelectionScreen()))),
           ]),
-        body:Column(children:[
+        body:SafeArea(child:Column(children:[
           // ── stats strip ──────────────────────────────────────────────────
           Padding(padding:const EdgeInsets.fromLTRB(16,4,16,12),
             child:Row(children:[
@@ -589,7 +589,7 @@ class BagrutMainScreen extends StatelessWidget {
                   elevation:6,shadowColor:_blue.withAlpha(80),
                   shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))),
               ))),
-        ]),
+        ])),
       ),
     );
   }

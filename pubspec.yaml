@@ -1,7 +1,7 @@
 name: yidaan
 description: "ידען — חידון שלבים"
 publish_to: 'none'
-version: 1.7.19+65
+version: 1.7.19+67
 
 environment:
   sdk: ^3.11.1
@@ -29,6 +29,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.1
 
 flutter_launcher_icons:
   ios: true
@@ -36,7 +37,19 @@ flutter_launcher_icons:
   image_path: "screen shots/icon_512.png"
   remove_alpha_ios: true
 
+flutter_native_splash:
+  # התמונה מכסה את כל המסך (רקע + לוגו + טקסט הכל כלול בתמונה אחת)
+  background_image: assets/splash/splash.png
+  fullscreen: true
+  android: true
+  ios: true
+  android_12:
+    # ל-Android 12+ יש API חדש שתומך רק באייקון על צבע אחיד, לא בתמונה מלאה —
+    # לכן מכבים אותו כאן כדי שגם שם תוצג התמונה המלאה בשיטה הישנה (תואם-לאחור)
+    android: false
+
 flutter:
   uses-material-design: true
   assets:
     - assets/sounds/
+    - assets/splash/

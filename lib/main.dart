@@ -282,7 +282,7 @@ void main() async {
   try { await Firebase.initializeApp(); await Analytics.init(); } catch(e) { debugPrint('Firebase init failed: $e'); }
   await NotificationService.init();
   await ICloudKV.restoreIfEmpty(); // שחזור מ-iCloud לפני טעינת שירותים (התקנה חדשה)
-  await PurchaseService.init(); await LevelService.init(); await EnergyService.init(); await QRepo.loadSeen(); await MistakesService.init();
+  await EnergyService.init(); await PurchaseService.init(); await LevelService.init(); await QRepo.loadSeen(); await MistakesService.init();
   await UserStatsService.init(); await InterestsService.init(); await BagrutService.init(); await _EnergyOverlay.init(); await Sfx.init();
   SeasonalService.init(); // ברקע — לא מחכים
   ThemeService.init();    // רקעים דינמיים מ-Firestore — ברקע

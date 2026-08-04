@@ -68,9 +68,10 @@ class EnergyService extends ChangeNotifier {
     final diff = _last.add(Duration(minutes: Cfg.energyRechargeMins)).difference(DateTime.now());
     return diff.inSeconds.clamp(0, Cfg.energyRechargeMins * 60);
   }
-  /// Called when Pro is activated — fills energy to max
+  /// Called when Pro is activated — fills energy to max and persists it
   void fillToMax() {
     _e = maxE;
+    _save();
     notifyListeners();
   }
 
