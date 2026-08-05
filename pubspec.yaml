@@ -29,7 +29,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.3
-  flutter_native_splash: ^2.4.1
+  flutter_native_splash: ^2.4.7
 
 flutter_launcher_icons:
   ios: true
@@ -38,15 +38,15 @@ flutter_launcher_icons:
   remove_alpha_ios: true
 
 flutter_native_splash:
-  # התמונה מכסה את כל המסך (רקע + לוגו + טקסט הכל כלול בתמונה אחת)
-  background_image: assets/splash/splash.png
-  fullscreen: true
+  # מסך פתיחה: רקע לבן + האייקון של האפליקציה ממורכז (מוגדל פי ~1.9),
+  # בדיוק כמו ההתנהגות הרגילה של אפליקציות (למשל SmartThings)
+  color: "#FFFFFF"
+  image: assets/splash/splash_icon.png
+  android_12:
+    image: assets/splash/splash_icon.png
+    icon_background_color: "#FFFFFF"
   android: true
   ios: true
-  android_12:
-    # ל-Android 12+ יש API חדש שתומך רק באייקון על צבע אחיד, לא בתמונה מלאה —
-    # לכן מכבים אותו כאן כדי שגם שם תוצג התמונה המלאה בשיטה הישנה (תואם-לאחור)
-    android: false
 
 flutter:
   uses-material-design: true
